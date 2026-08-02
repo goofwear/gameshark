@@ -1,0 +1,15 @@
+{
+  "id": "gameshark_compat",
+  "name": "GameShark Compatibility",
+  "version": "0.4.0",
+  "api": 2,
+  "entry": "main.lua",
+  "profile": "overhaul",
+  "category": "TOOL",
+  "game_version": ">=0.1.47 <0.2.0",
+  "priority": 100,
+  "dependencies": [],
+  "optional_dependencies": [],
+  "conflicts": [],
+  "description": "GameShark translations with Surfboard, trainer Pokemon capture, and selectable wild encounters for Gen1Recomp 0.1.47."
+}
