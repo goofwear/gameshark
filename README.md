@@ -56,3 +56,7 @@ Restart the game, enable the mod, and use **START → GAMESHARK**.
 - One-Hit Enemies activates when the player lands a damaging move.
 - Safari codes only have an effect while a Safari game is active.
 - Item and badge effects remain in the save after disabling because they are real inventory/progress changes.
+
+
+
+https://www.youtube.com/watch?v=YbEwUOP5KiA
