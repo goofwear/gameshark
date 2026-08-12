@@ -1,13 +1,13 @@
 # Changelog
 
-## [0.4.0] - 2026-07-31
-### Added
-- USE SURFBOARD action.
-- `010157D0` STEAL TRAINER cheat.
-- Native party/PC and Pokédex storage for captured trainer Pokémon.
+## 0.5.0 - 2026-08-12
 
-## [0.3.0] - 2026-07-31
-### Added
-- Selectable wild Pokémon.
-### Fixed
-- Compact menu labels.
+- Added Pokemon Gold / Gen 2 support.
+- One package now targets `gen1` and `gen2`.
+- Added automatic generation detection.
+- Added Gold-specific money and badge handling.
+- Added Gold trainer-capture handling through the Gen 2 battle screen.
+- Shared collision, encounter, damage, catching, item, HP and Pokemon-picker behavior across generations.
+- Safari cheats are hidden on Gold.
+- Changed author to **goofwear**.
+- Raised packaged-release target to Gen1Recomp 0.1.79+ while retaining compatible `0.0.0-dev` builds.

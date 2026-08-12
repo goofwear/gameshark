@@ -1,25 +1,11 @@
 return {
-  summary = "Working GameShark translations plus a selectable wild Pokemon cheat.",
+  summary = "Universal GameShark-style cheats for Gen1Recomp Gen 1 and Gen 2.",
   author = "goofwear",
-  tags = { "tool", "quality-of-life", "gameshark", "cheats" },
+  tags = { "tool", "gameshark", "cheats", "gen1", "gen2" },
   differences = {
-    changed = {
-      "Uses compact menu labels that fit the Game Boy-width layout.",
-      "Supported GameShark codes are translated into native engine effects."
-    },
-    added = {
-      "A full Pokemon selector populated from the merged Pokedex.",
-      "A wild encounter modifier preserving normal encounter rate and level."
-    },
-    known = {
-      "NO BATTLES overrides the selected-wild-Pokemon cheat.",
-      "Arbitrary untranslated Game Boy RAM addresses remain unsupported.",
-      "Walk Through Walls does not bypass map bounds."
-    }
+    changed = { "One GAMESHARK menu automatically adapts to Red/Blue/Yellow or Gold." },
+    added = { "Pokemon Gold / Gen 2 support", "Per-generation save handling", "Universal wild Pokemon picker" },
+    known = { "Safari cheats are Gen 1 only.", "Gold support targets Gen1Recomp 0.1.79+ and current dev API." }
   },
-  credits = {
-    { who = "bryanthaboi/gen1recomp", for_ = "engine and mod API" },
-    { who = "GameShark code-list publishers supplied by the user", for_ = "reference codes" }
-  },
-  compat = { engine = ">=0.1.47 <0.2.0", modApi = 2 },
+  compat = { engine = ">=0.1.79 <0.2.0 || =0.0.0-dev", modApi = 2 },
 }
