@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.5.0
+-- GameShark Compatibility 0.5.1
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -137,7 +137,8 @@ return function(mod)
     if isGold(game) then
       for _,s in ipairs(goldBattleScreens(game)) do
         local mon=s.battle and s.battle.enemy
-        if mon and not mon.status then mon.status="BRN" end
+        -- Gen 2 stores the full status id ("burn"), while Gen 1 stores "BRN".
+        if mon and not mon.status then mon.status="burn" end
       end
     else
       for _,b in ipairs(gen1BattleStates(game)) do
@@ -229,9 +230,25 @@ return function(mod)
   mod.hooks:wrap("battle.damage", function(next,ctx)
     local damage,info=next(ctx)
     if enabled("enemy_hp") and ctx and ctx.user and ctx.target then
-      local userPlayer=ctx.user.isPlayer or ctx.user.side=="player"
-      local targetEnemy=(ctx.target.isPlayer==false) or ctx.target.side=="enemy"
-      if userPlayer and targetEnemy then damage=math.max(1,ctx.target.hp or (ctx.target.mon and ctx.target.mon.hp) or damage or 1) end
+      local userPlayer, targetEnemy = false, false
+
+      -- Gen 2 hands the raw active Mon tables to battle.damage.
+      -- Gen 1 hands battler wrappers with isPlayer/mon.
+      if ctx.battle and ctx.battle.player and ctx.battle.enemy then
+        userPlayer = (ctx.user == ctx.battle.player)
+        targetEnemy = (ctx.target == ctx.battle.enemy)
+      else
+        userPlayer = ctx.user.isPlayer == true or ctx.user.side == "player"
+        targetEnemy = ctx.target.isPlayer == false or ctx.target.side == "enemy"
+      end
+
+      if userPlayer and targetEnemy then
+        local remaining = ctx.target.hp
+          or (ctx.target.mon and ctx.target.mon.hp)
+          or damage
+          or 1
+        damage = math.max(1, remaining)
+      end
     end
     return damage,info
   end)

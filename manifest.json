@@ -1,7 +1,7 @@
 {
   "id": "gameshark_compat",
   "name": "GameShark Compatibility",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
@@ -15,5 +15,6 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat menu for Gen1Recomp Gen 1 and Pokemon Gold."
+  "description": "Universal GameShark-style cheat menu for Gen1Recomp Gen 1 and Pokemon Gold.",
+  "github": "goofwear/gameshark"
 }

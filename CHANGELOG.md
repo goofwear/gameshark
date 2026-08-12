@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.1] - 2026-08-12
+
+### Fixed
+- Fixed One-Hit KO on Pokemon Gold / Gen 2 by identifying the active player
+  and enemy Pokemon through `ctx.battle.player` and `ctx.battle.enemy`.
+- Fixed Burn Foe on Pokemon Gold / Gen 2 by using Gold's native `burn`
+  status id instead of Gen 1's `BRN`.
+
+### Added
+- Added `"github": "goofwear/gameshark"` to `manifest.json` so Gen1Recomp can
+  check GitHub releases for updates and older versions.
+
+
 ## 0.5.0 - 2026-08-12
 
 - Added Pokemon Gold / Gen 2 support.

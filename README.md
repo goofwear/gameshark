@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.5.0
+# GameShark Compatibility v0.5.1
 
 **Author: goofwear**
 
@@ -48,10 +48,26 @@ This version does not use `io`, `os.getenv`, `os.execute`, `love.filesystem`, `d
 
 ## Installation
 
-Copy the `gen1recomp_gameshark_v0.5.0_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
+Copy the `gen1recomp_gameshark_v0.5.1_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
 
 Delete older GameShark Compatibility folders first so only one version is installed.
 
 ## Notes
 
 Save-data cheats such as items and badges make real changes to the active save. Disabling the cheat does not remove items or badges already granted. Save before experimenting with trainer capture or wall walking.
+
+
+## v0.5.1 fixes
+
+- Fixed **ONE HIT KO** on Pokemon Gold / Gen 2.
+  Gold's `battle.damage` hook uses the active Pokemon tables directly, so the
+  mod now identifies player and enemy ownership through the live battle object.
+- Fixed **BURN FOE** on Pokemon Gold / Gen 2.
+  Gold stores the status id as `burn`; Gen 1 uses `BRN`.
+- Added the repository to the manifest for Gen1Recomp's mod updater:
+
+```json
+"github": "goofwear/gameshark"
+```
+
+Repository: https://github.com/goofwear/gameshark
