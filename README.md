@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.5.1
+# GameShark Compatibility v0.5.2
 
 **Author: goofwear**
 
@@ -48,7 +48,7 @@ This version does not use `io`, `os.getenv`, `os.execute`, `love.filesystem`, `d
 
 ## Installation
 
-Copy the `gen1recomp_gameshark_v0.5.1_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
+Copy the `gen1recomp_gameshark_v0.5.2_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
 
 Delete older GameShark Compatibility folders first so only one version is installed.
 
@@ -57,7 +57,7 @@ Delete older GameShark Compatibility folders first so only one version is instal
 Save-data cheats such as items and badges make real changes to the active save. Disabling the cheat does not remove items or badges already granted. Save before experimenting with trainer capture or wall walking.
 
 
-## v0.5.1 fixes
+## v0.5.2 fixes
 
 - Fixed **ONE HIT KO** on Pokemon Gold / Gen 2.
   Gold's `battle.damage` hook uses the active Pokemon tables directly, so the
@@ -71,3 +71,31 @@ Save-data cheats such as items and badges make real changes to the active save. 
 ```
 
 Repository: https://github.com/goofwear/gameshark
+
+
+## v0.5.2 — Gold Wild Pick customization
+
+When playing Pokemon Gold / Gen 2, **WILD PICK** now has two additional controls:
+
+- **WILD GENDER** — `RND`, `M`, or `F`
+- **WILD SHINY** — `RND`, `YES`, or `NO`
+
+Choose the Pokemon with **PICK POKEMON**, configure the two options, then enable
+**WILD PICK**. The normal encounter level and encounter rate are still preserved.
+
+Genderless Pokemon automatically show `N/A` and keep Gen 2's native `unknown`
+gender. These controls are intentionally not shown in Gen 1 because Red/Blue do
+not have native Pokemon gender or shininess.
+
+## Optional Battle Art first-person compatibility
+
+`WALL WALK` now also supports the first-person free-movement path used by
+**Battle Art Voxel Fork** (`BATTLE_ART_VOXEL_FORK`). There is **no dependency**:
+
+- GameShark does not require Battle Art.
+- Battle Art is not listed in `dependencies` or `optional_dependencies`.
+- If Battle Art is absent, no compatibility code activates.
+- If it is present and exports its public companion-module interface, GameShark
+  adapts the first-person free walk only while `WALL WALK` is enabled.
+
+Map bounds remain protected.

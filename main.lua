@@ -1,10 +1,13 @@
--- GameShark Compatibility 0.5.1
+-- GameShark Compatibility 0.5.2
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
 
 local MAIN_SCREEN = "GameSharkCompat"
 local PICK_SCREEN = "GameSharkPokemonPicker"
+
+local GENDER_CHOICES = { "random", "male", "female" }
+local SHINY_CHOICES = { "random", "yes", "no" }
 
 local CHEATS = {
   { name="WALL WALK", effect="walk", gen1="010138CD", gold="010AA3CE" },
@@ -42,10 +45,20 @@ local function parseCode(v)
 end
 
 return function(mod)
-  local state = { active={}, selectedSpecies="PIKACHU" }
+  local state = {
+    active={}, selectedSpecies="PIKACHU",
+    wildGender="random", wildShiny="random",
+    pendingWild=nil,
+  }
   if type(mod.save)=="table" then
     if type(mod.save.activeEffects)=="table" then state.active=mod.save.activeEffects end
     if type(mod.save.selectedSpecies)=="string" then state.selectedSpecies=mod.save.selectedSpecies end
+    if mod.save.wildGender=="male" or mod.save.wildGender=="female" or mod.save.wildGender=="random" then
+      state.wildGender=mod.save.wildGender
+    end
+    if mod.save.wildShiny=="yes" or mod.save.wildShiny=="no" or mod.save.wildShiny=="random" then
+      state.wildShiny=mod.save.wildShiny
+    end
     -- migrate v0.4.x code-keyed state
     if type(mod.save.active)=="table" then
       for _,c in ipairs(CHEATS) do
@@ -59,6 +72,8 @@ return function(mod)
     if type(mod.save)=="table" then
       mod.save.activeEffects=state.active
       mod.save.selectedSpecies=state.selectedSpecies
+      mod.save.wildGender=state.wildGender
+      mod.save.wildShiny=state.wildShiny
     end
   end
   local function enabled(effect) return state.active[effect]==true end
@@ -176,6 +191,76 @@ return function(mod)
     return ok
   end
 
+  local function selectedDef()
+    return mod.content.pokemon:get(state.selectedSpecies)
+  end
+
+  local function selectedGenderless()
+    local def=selectedDef()
+    return not def or def.genderRatio==nil or def.genderRatio==0xff
+  end
+
+  local function cycleChoice(current, choices)
+    for i,v in ipairs(choices) do
+      if v==current then return choices[(i % #choices)+1] end
+    end
+    return choices[1]
+  end
+
+  -- Battle Art 1ST compatibility is OPTIONAL. Nothing in the manifest depends
+  -- on Battle Art. If it is installed, its public `exports.lib` lets companion
+  -- mods reach the same cached FreeMove module that its first-person walk uses.
+  local battleArtCompatInstalled=false
+  local function installBattleArtCompat()
+    if battleArtCompatInstalled or not mod.find then return end
+    local ok, other=pcall(mod.find, "BATTLE_ART_VOXEL_FORK")
+    if not ok or not other or not other.exports then return end
+    local V=other.exports.lib
+    if not V or type(V.require)~="function" then return end
+    local okFree, FreeMove=pcall(V.require, "FreeMove")
+    if not okFree or type(FreeMove)~="table" or type(FreeMove.tick)~="function" then return end
+    if FreeMove._gamesharkWallWalkCompat then
+      battleArtCompatInstalled=true
+      return
+    end
+
+    local originalTick=FreeMove.tick
+    FreeMove.tick=function(stateObj)
+      if not enabled("walk") or not stateObj or not stateObj.map then
+        return originalTick(stateObj)
+      end
+
+      -- Battle Art's free walk bypasses movement.collision and checks these
+      -- three sources directly. Relax only those checks, only for this tick,
+      -- then restore the other mod's state exactly as it was.
+      local map=stateObj.map
+      local oldWalkable=rawget(map, "isWalkableCell")
+      local oldEntities=stateObj.entities
+      local game=mod.game
+      local field=game and game.data and game.data.field
+      local oldPairs=field and field.tilePairs
+
+      map.isWalkableCell=function(self,cx,cy)
+        return self:inBounds(cx,cy)
+      end
+      stateObj.entities={}
+      if field and oldPairs then
+        field.tilePairs={ land={}, water={} }
+      end
+
+      local okTick,a,b,c=pcall(originalTick,stateObj)
+
+      if oldWalkable==nil then map.isWalkableCell=nil else map.isWalkableCell=oldWalkable end
+      stateObj.entities=oldEntities
+      if field and oldPairs then field.tilePairs=oldPairs end
+
+      if not okTick then error(a,0) end
+      return a,b,c
+    end
+    FreeMove._gamesharkWallWalkCompat=true
+    battleArtCompatInstalled=true
+  end
+
   local function speciesRows()
     local rows={}
     for id,mon in mod.content.pokemon:each() do rows[#rows+1]={id=id,name=mon.name or id,dex=mon.dex or 9999} end
@@ -184,6 +269,7 @@ return function(mod)
   end
 
   mod.hooks:wrap("input.step", function(next,game,dt)
+    installBattleArtCompat()
     local save=game and game.save
     if save then
       if enabled("cash") then if isGold(game) then save.player.money=999999 else save.money=999999 end end
@@ -218,8 +304,47 @@ return function(mod)
   mod.hooks:wrap("encounter.roll", function(next,def,ctx)
     if enabled("no_encounters") then return nil end
     local r=next(def,ctx)
-    if r and enabled("wild_pick") and state.selectedSpecies then r.species=state.selectedSpecies end
+    if r and enabled("wild_pick") and state.selectedSpecies then
+      r.species=state.selectedSpecies
+      -- Gold constructs the actual Mon after the encounter roll. Carry these
+      -- choices only into that next matching build; shiny.roll runs before
+      -- gender.roll, which clears the marker after both have had their say.
+      local game=mod.game
+      if isGold(game) and (state.wildGender~="random" or state.wildShiny~="random") then
+        state.pendingWild={ species=state.selectedSpecies, level=r.level }
+      end
+    end
     return r
+  end)
+
+  mod.hooks:wrap("shiny.roll", function(next,ctx)
+    local p=state.pendingWild
+    if not (p and ctx and ctx.species==p.species
+       and (p.level==nil or ctx.level==nil or ctx.level==p.level)) then
+      return next(ctx)
+    end
+    if state.wildShiny=="yes" then return true end
+    if state.wildShiny=="no" then return false end
+    return next(ctx)
+  end)
+
+  mod.hooks:wrap("gender.roll", function(next,ctx)
+    local p=state.pendingWild
+    if not (p and ctx and ctx.species==p.species
+       and (p.level==nil or ctx.level==nil or ctx.level==p.level)) then
+      return next(ctx)
+    end
+    local result
+    -- 0xff is Gen 2's genderless ratio. Never force male/female onto one.
+    if ctx.ratio==nil or ctx.ratio==0xff then
+      result="unknown"
+    elseif state.wildGender=="male" or state.wildGender=="female" then
+      result=state.wildGender
+    else
+      result=next(ctx)
+    end
+    state.pendingWild=nil
+    return result
   end)
   mod.hooks:wrap("catch.rate", function(next,ball,mon,def,opts)
     if trainerCatchInProgress then return true,255 end
@@ -270,12 +395,31 @@ return function(mod)
     return false,"unknown cheat"
   end
   mod.exports.getSelectedSpecies=function() return state.selectedSpecies end
-  mod.exports.setSelectedSpecies=function(id) if not mod.content.pokemon:get(id) then return false,"unknown Pokemon" end state.selectedSpecies=id; persist(); return true end
+  mod.exports.setSelectedSpecies=function(id)
+    if not mod.content.pokemon:get(id) then return false,"unknown Pokemon" end
+    state.selectedSpecies=id
+    if selectedGenderless() then state.wildGender="random" end
+    persist(); return true
+  end
+  mod.exports.getWildGender=function() return state.wildGender end
+  mod.exports.setWildGender=function(value)
+    if value~="random" and value~="male" and value~="female" then return false,"invalid gender choice" end
+    if selectedGenderless() and value~="random" then return false,"selected Pokemon is genderless" end
+    state.wildGender=value; persist(); return true
+  end
+  mod.exports.getWildShiny=function() return state.wildShiny end
+  mod.exports.setWildShiny=function(value)
+    if value~="random" and value~="yes" and value~="no" then return false,"invalid shiny choice" end
+    state.wildShiny=value; persist(); return true
+  end
 
   mod.content.screens:register(PICK_SCREEN,{new=function(game)
     local items={}; for _,r in ipairs(speciesRows()) do items[#items+1]={label=r.name,right=r.id==state.selectedSpecies and "*" or "",value=r.id} end
     return mod.ui.ListMenu.new(game,"CHOOSE POKEMON",items,{pageJump=true,onChoose=function(item,menu)
-      if not item then return end; state.selectedSpecies=item.value; persist(); menu:close(); mod.ui.push(game,MAIN_SCREEN)
+      if not item then return end
+      state.selectedSpecies=item.value
+      if selectedGenderless() then state.wildGender="random" end
+      persist(); menu:close(); mod.ui.push(game,MAIN_SCREEN)
     end})
   end})
 
@@ -285,10 +429,33 @@ return function(mod)
       local supported=not (gold and c.gen2==false)
       if supported then items[#items+1]={label=c.name,right=enabled(c.effect) and "ON" or "OFF",value=c.effect,kind="toggle"} end
     end
-    items[#items+1]={label="USE SURFBOARD",kind="surfboard"}
     items[#items+1]={label="PICK POKEMON",kind="picker"}
+    if gold then
+      items[#items+1]={
+        label="WILD GENDER",
+        right=selectedGenderless() and "N/A" or (state.wildGender=="random" and "RND" or string.upper(state.wildGender:sub(1,1))),
+        kind="gender"
+      }
+      items[#items+1]={
+        label="WILD SHINY",
+        right=state.wildShiny=="random" and "RND" or string.upper(state.wildShiny),
+        kind="shiny"
+      }
+    end
+    items[#items+1]={label="USE SURFBOARD",kind="surfboard"}
     return mod.ui.ListMenu.new(game,gold and "GAMESHARK G2" or "GAMESHARK G1",items,{pageJump=true,onChoose=function(item,menu)
       if not item then return end
+      if item.kind=="gender" then
+        if not selectedGenderless() then
+          state.wildGender=cycleChoice(state.wildGender,GENDER_CHOICES)
+          persist()
+        end
+        menu:close(); mod.ui.push(game,MAIN_SCREEN); return
+      end
+      if item.kind=="shiny" then
+        state.wildShiny=cycleChoice(state.wildShiny,SHINY_CHOICES)
+        persist(); menu:close(); mod.ui.push(game,MAIN_SCREEN); return
+      end
       if item.kind=="surfboard" then
         menu:close(); local ok=useSurfboard(game); if not ok then mod.ui.push(game,MAIN_SCREEN) end; return
       end

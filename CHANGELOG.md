@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.2] - 2026-08-12
+
+### Added
+- Gold Wild Pick gender choice: Random / Male / Female.
+- Gold Wild Pick shiny choice: Random / Yes / No.
+- Genderless Pokemon detection; genderless species cannot be forced male/female.
+- Runtime-only compatibility for Battle Art Voxel Fork first-person movement.
+
+### Compatibility
+- `WALL WALK` now relaxes Battle Art's separate first-person free-movement
+  collision checks when that mod is already installed.
+- Battle Art remains completely optional and is not a dependency or optional
+  dependency in the manifest.
+- Standard Gen1Recomp `movement.collision` behavior remains unchanged.
+
+
 ## [0.5.1] - 2026-08-12
 
 ### Fixed
