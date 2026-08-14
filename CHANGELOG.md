@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.3] - 2026-08-14
+
+### Fixed
+- Gold ALL BADGES now creates exactly 16 badge entries instead of 32.
+- Cleans duplicate numeric badge aliases written by v0.5.0-v0.5.2.
+- Removed `growthRates` and `tmhmMoves` from the Wild Pokemon picker.
+- Preserved the GameShark-menu cursor/scroll position after changes.
+- Preserved the Pokemon-picker cursor/scroll position after selection.
+
+
 ## [0.5.2] - 2026-08-12
 
 ### Added

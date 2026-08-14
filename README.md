@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.5.2
+# GameShark Compatibility v0.5.3
 
 **Author: goofwear**
 
@@ -48,7 +48,7 @@ This version does not use `io`, `os.getenv`, `os.execute`, `love.filesystem`, `d
 
 ## Installation
 
-Copy the `gen1recomp_gameshark_v0.5.2_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
+Copy the `gen1recomp_gameshark_v0.5.3_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
 
 Delete older GameShark Compatibility folders first so only one version is installed.
 
@@ -57,7 +57,7 @@ Delete older GameShark Compatibility folders first so only one version is instal
 Save-data cheats such as items and badges make real changes to the active save. Disabling the cheat does not remove items or badges already granted. Save before experimenting with trainer capture or wall walking.
 
 
-## v0.5.2 fixes
+## v0.5.3 fixes
 
 - Fixed **ONE HIT KO** on Pokemon Gold / Gen 2.
   Gold's `battle.damage` hook uses the active Pokemon tables directly, so the
@@ -73,7 +73,7 @@ Save-data cheats such as items and badges make real changes to the active save. 
 Repository: https://github.com/goofwear/gameshark
 
 
-## v0.5.2 — Gold Wild Pick customization
+## v0.5.3 — Gold Wild Pick customization
 
 When playing Pokemon Gold / Gen 2, **WILD PICK** now has two additional controls:
 
@@ -99,3 +99,15 @@ not have native Pokemon gender or shininess.
   adapts the first-person free walk only while `WALL WALK` is enabled.
 
 Map bounds remain protected.
+
+
+## v0.5.3 fixes
+
+- **ALL BADGES on Gold now creates exactly 16 badges**: eight Johto and eight
+  Kanto. Numeric duplicate badge aliases left by v0.5.0-v0.5.2 are removed.
+- `growthRates` and `tmhmMoves` are excluded from **PICK POKEMON** because they
+  are internal Gold data records, not Pokemon.
+- The GameShark menu now preserves its cursor and scroll position after toggling
+  cheats or changing Wild Pick settings.
+- The Pokemon picker also preserves its cursor and scroll position after a
+  selection instead of jumping back to the top.

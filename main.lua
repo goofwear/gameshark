@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.5.2
+-- GameShark Compatibility 0.5.3
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -50,6 +50,11 @@ return function(mod)
     wildGender="random", wildShiny="random",
     pendingWild=nil,
   }
+
+  local uiPos = {
+    mainIndex = 1, mainScroll = 0,
+    pickIndex = 1, pickScroll = 0,
+  }
   if type(mod.save)=="table" then
     if type(mod.save.activeEffects)=="table" then state.active=mod.save.activeEffects end
     if type(mod.save.selectedSpecies)=="string" then state.selectedSpecies=mod.save.selectedSpecies end
@@ -91,11 +96,22 @@ return function(mod)
 
   local function grantBadges(save)
     if save.version=="gold" or save.generation==2 then
-      save.player=save.player or {}; save.player.badges=save.player.badges or {}; save.player.kantoBadges=save.player.kantoBadges or {}
-      for i,b in ipairs(JOHTO_BADGES) do save.player.badges[b]=true; save.player.badges[i]=true end
-      for i,b in ipairs(KANTO_BADGES) do save.player.kantoBadges[b]=true; save.player.kantoBadges[i]=true end
+      save.player=save.player or {}
+      save.player.badges=save.player.badges or {}
+      save.player.kantoBadges=save.player.kantoBadges or {}
+
+      -- Older universal builds wrote each Gold badge twice: once by name
+      -- and once by numeric index. Remove those duplicate aliases first.
+      for i=1,8 do
+        save.player.badges[i]=nil
+        save.player.kantoBadges[i]=nil
+      end
+
+      for _,b in ipairs(JOHTO_BADGES) do save.player.badges[b]=true end
+      for _,b in ipairs(KANTO_BADGES) do save.player.kantoBadges[b]=true end
     else
-      save.inventory=save.inventory or {}; for _,b in ipairs(GEN1_BADGES) do save.inventory[b]=1 end
+      save.inventory=save.inventory or {}
+      for _,b in ipairs(GEN1_BADGES) do save.inventory[b]=1 end
     end
   end
 
@@ -263,8 +279,15 @@ return function(mod)
 
   local function speciesRows()
     local rows={}
-    for id,mon in mod.content.pokemon:each() do rows[#rows+1]={id=id,name=mon.name or id,dex=mon.dex or 9999} end
-    table.sort(rows,function(a,b) if a.dex~=b.dex then return a.dex<b.dex end return a.id<b.id end)
+    for id,mon in mod.content.pokemon:each() do
+      if id~="growthRates" and id~="tmhmMoves" then
+        rows[#rows+1]={id=id,name=mon.name or id,dex=mon.dex or 9999}
+      end
+    end
+    table.sort(rows,function(a,b)
+      if a.dex~=b.dex then return a.dex<b.dex end
+      return a.id<b.id
+    end)
     return rows
   end
 
@@ -414,13 +437,33 @@ return function(mod)
   end
 
   mod.content.screens:register(PICK_SCREEN,{new=function(game)
-    local items={}; for _,r in ipairs(speciesRows()) do items[#items+1]={label=r.name,right=r.id==state.selectedSpecies and "*" or "",value=r.id} end
-    return mod.ui.ListMenu.new(game,"CHOOSE POKEMON",items,{pageJump=true,onChoose=function(item,menu)
-      if not item then return end
-      state.selectedSpecies=item.value
-      if selectedGenderless() then state.wildGender="random" end
-      persist(); menu:close(); mod.ui.push(game,MAIN_SCREEN)
-    end})
+    local items={}
+    for _,r in ipairs(speciesRows()) do
+      items[#items+1]={
+        label=r.name,
+        right=r.id==state.selectedSpecies and "*" or "",
+        value=r.id
+      }
+    end
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"CHOOSE POKEMON",items,{
+      pageJump=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.pickIndex=current.index or uiPos.pickIndex
+        uiPos.pickScroll=current.scroll or uiPos.pickScroll
+        state.selectedSpecies=item.value
+        if selectedGenderless() then state.wildGender="random" end
+        persist()
+        current:close()
+        mod.ui.push(game,MAIN_SCREEN)
+      end
+    })
+
+    menu.index=math.max(1,math.min(uiPos.pickIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.pickScroll,math.max(0,#items-menu.rows)))
+    return menu
   end})
 
   mod.content.screens:register(MAIN_SCREEN,{new=function(game)
@@ -443,25 +486,36 @@ return function(mod)
       }
     end
     items[#items+1]={label="USE SURFBOARD",kind="surfboard"}
-    return mod.ui.ListMenu.new(game,gold and "GAMESHARK G2" or "GAMESHARK G1",items,{pageJump=true,onChoose=function(item,menu)
+    local menu
+    menu=mod.ui.ListMenu.new(game,gold and "GAMESHARK G2" or "GAMESHARK G1",items,{
+      pageJump=true,
+      onChoose=function(item,current)
       if not item then return end
+      uiPos.mainIndex=current.index or uiPos.mainIndex
+      uiPos.mainScroll=current.scroll or uiPos.mainScroll
       if item.kind=="gender" then
         if not selectedGenderless() then
           state.wildGender=cycleChoice(state.wildGender,GENDER_CHOICES)
           persist()
         end
-        menu:close(); mod.ui.push(game,MAIN_SCREEN); return
+        current:close(); mod.ui.push(game,MAIN_SCREEN); return
       end
       if item.kind=="shiny" then
         state.wildShiny=cycleChoice(state.wildShiny,SHINY_CHOICES)
-        persist(); menu:close(); mod.ui.push(game,MAIN_SCREEN); return
+        persist(); current:close(); mod.ui.push(game,MAIN_SCREEN); return
       end
       if item.kind=="surfboard" then
-        menu:close(); local ok=useSurfboard(game); if not ok then mod.ui.push(game,MAIN_SCREEN) end; return
+        current:close(); local ok=useSurfboard(game); if not ok then mod.ui.push(game,MAIN_SCREEN) end; return
       end
-      if item.kind=="picker" then menu:close(); mod.ui.push(game,PICK_SCREEN); return end
-      setEnabled(item.value,not enabled(item.value)); menu:close(); mod.ui.push(game,MAIN_SCREEN)
-    end})
+      if item.kind=="picker" then current:close(); mod.ui.push(game,PICK_SCREEN); return end
+      setEnabled(item.value,not enabled(item.value))
+      current:close()
+      mod.ui.push(game,MAIN_SCREEN)
+      end
+    })
+    menu.index=math.max(1,math.min(uiPos.mainIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.mainScroll,math.max(0,#items-menu.rows)))
+    return menu
   end})
 
   mod.hooks:wrap("ui.start_menu.items",function(next,game,items)
