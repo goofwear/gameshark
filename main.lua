@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.5.3
+-- GameShark Compatibility 0.5.4
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -23,6 +23,7 @@ local CHEATS = {
   { name="SAFARI TIME", effect="safari_time", gen1="01F00ED7", gen2=false },
   { name="STEAL TRAINER", effect="steal_trainer", gen1="010157D0", gold="010116D1" },
   { name="WILD PICK", effect="wild_pick", gen1="01FF00D0", gold="01??EDD0" },
+  { name="PAY DAY FIX", effect="payday_fix", gen1=false, gold=nil, gen2only=true },
 }
 
 local GEN1_BADGES = {
@@ -73,6 +74,13 @@ return function(mod)
       end
     end
   end
+  -- Gen1Recomp 0.1.93 has PAY_DAY in Gold's move data but no Gen-2
+  -- EFFECT_PAY_DAY implementation. Keep the compatibility repair enabled by
+  -- default; users can turn it off from the GameShark menu.
+  if state.active.payday_fix == nil then
+    state.active.payday_fix = true
+  end
+
   local function persist()
     if type(mod.save)=="table" then
       mod.save.activeEffects=state.active
@@ -277,6 +285,116 @@ return function(mod)
     battleArtCompatInstalled=true
   end
 
+  local SHINY_ATTACK_DVS = { 2, 3, 6, 7, 10, 11, 14, 15 }
+
+  local function hpDV(dvs)
+    local function bit(v) return (v or 0) % 2 end
+    return bit(dvs.attack) * 8 + bit(dvs.defense) * 4
+      + bit(dvs.speed) * 2 + bit(dvs.special)
+  end
+
+  local function vanillaGender(def, dvs)
+    local ratio=def and def.genderRatio
+    if ratio==nil or ratio==0xff then return "unknown" end
+    local threshold=math.floor(ratio/16)
+    return ((dvs and dvs.attack or 0)<threshold) and "female" or "male"
+  end
+
+  local function isShinyDVs(dvs)
+    if not dvs then return false end
+    if dvs.speed~=10 or dvs.defense~=10 or dvs.special~=10 then return false end
+    local a=dvs.attack or 0
+    return a%4==2 or a%4==3
+  end
+
+  local function chooseAttackDV(def, current, wantedGender, requireShiny)
+    local pool={}
+    if requireShiny then
+      for _,v in ipairs(SHINY_ATTACK_DVS) do pool[#pool+1]=v end
+    else
+      for v=0,15 do pool[#pool+1]=v end
+    end
+
+    local best=nil
+    local bestDist=999
+    for _,v in ipairs(pool) do
+      local ok=true
+      if wantedGender=="male" or wantedGender=="female" then
+        ok=(vanillaGender(def,{attack=v})==wantedGender)
+      end
+      if ok then
+        local dist=math.abs(v-(current or v))
+        if dist<bestDist then best,bestDist=v,dist end
+      end
+    end
+    return best
+  end
+
+  local function statValue(base,dv,level,statExp)
+    local exp=math.floor(math.sqrt(statExp or 0)/4)
+    return math.floor((((base or 1)*2+(dv or 0)*2+exp)*level)/100)+5
+  end
+
+  local function refreshGoldStats(mon,def)
+    if not (mon and def and mon.dvs) then return end
+    local level=mon.level or 1
+    local se=mon.statExp or {}
+    mon.dvs.hp=hpDV(mon.dvs)
+    local hp=math.floor((((def.baseStats and def.baseStats.hp or 1)*2
+      +(mon.dvs.hp or 0)*2+math.floor(math.sqrt(se.hp or 0)/4))*level)/100)
+      +level+10
+    local oldMax=mon.maxHp or (mon.stats and mon.stats.hp) or hp
+    local oldHp=mon.hp or oldMax
+    mon.stats=mon.stats or {}
+    mon.stats.hp=hp
+    mon.stats.attack=statValue(def.baseStats and def.baseStats.attack,mon.dvs.attack,level,se.attack)
+    mon.stats.defense=statValue(def.baseStats and def.baseStats.defense,mon.dvs.defense,level,se.defense)
+    mon.stats.speed=statValue(def.baseStats and def.baseStats.speed,mon.dvs.speed,level,se.speed)
+    mon.stats.specialAttack=statValue(def.baseStats and def.baseStats.specialAttack,mon.dvs.special,level,se.special or se.specialAttack)
+    mon.stats.specialDefense=statValue(def.baseStats and def.baseStats.specialDefense,mon.dvs.special,level,se.special or se.specialDefense)
+    mon.maxHp=hp
+    -- Wild Pokemon are normally full when built. Preserve damage if some other
+    -- mod deliberately altered HP before battle.started.
+    if oldHp>=oldMax then mon.hp=hp else mon.hp=math.max(1,math.min(hp,oldHp)) end
+  end
+
+  local function applyPendingWildIdentity(mon)
+    local p=state.pendingWild
+    if not (p and mon and mon.species==p.species
+       and (p.level==nil or mon.level==nil or mon.level==p.level)) then
+      return
+    end
+
+    local def=mod.content.pokemon:get(mon.species)
+    if not def then state.pendingWild=nil; return end
+    mon.dvs=mon.dvs or {}
+
+    if state.wildShiny=="yes" then
+      mon.dvs.defense=10
+      mon.dvs.speed=10
+      mon.dvs.special=10
+      local chosen=chooseAttackDV(def,mon.dvs.attack,state.wildGender,true)
+      -- Some authentic Gen-2 gender/shiny combinations are impossible
+      -- (for example certain 12.5%-female species). Shininess wins in that
+      -- case and the engine-derived gender is retained.
+      mon.dvs.attack=chosen or chooseAttackDV(def,mon.dvs.attack,"random",true) or 10
+    elseif state.wildShiny=="no" and isShinyDVs(mon.dvs) then
+      -- Break the shiny pattern without disturbing Attack/gender.
+      mon.dvs.speed=9
+    end
+
+    if state.wildGender=="male" or state.wildGender=="female" then
+      local chosen=chooseAttackDV(def,mon.dvs.attack,state.wildGender,state.wildShiny=="yes")
+      if chosen then mon.dvs.attack=chosen end
+    end
+
+    mon.dvs.hp=hpDV(mon.dvs)
+    mon.shiny=isShinyDVs(mon.dvs)
+    mon.gender=vanillaGender(def,mon.dvs)
+    refreshGoldStats(mon,def)
+    state.pendingWild=nil
+  end
+
   local function speciesRows()
     local rows={}
     for id,mon in mod.content.pokemon:each() do
@@ -346,8 +464,29 @@ return function(mod)
        and (p.level==nil or ctx.level==nil or ctx.level==p.level)) then
       return next(ctx)
     end
-    if state.wildShiny=="yes" then return true end
-    if state.wildShiny=="no" then return false end
+
+    if state.wildShiny=="yes" then
+      -- 0.1.93 and later increasingly treat the DVs as authoritative. Write
+      -- the authentic Gen-2 shiny DV pattern instead of only changing the
+      -- temporary boolean returned by shiny.roll.
+      if ctx.dvs then
+        ctx.dvs.defense=10
+        ctx.dvs.speed=10
+        ctx.dvs.special=10
+        local chosen=chooseAttackDV(ctx.def,ctx.dvs.attack,state.wildGender,true)
+        ctx.dvs.attack=chosen or chooseAttackDV(ctx.def,ctx.dvs.attack,"random",true) or 10
+        ctx.dvs.hp=hpDV(ctx.dvs)
+      end
+      return true
+    end
+
+    if state.wildShiny=="no" then
+      if ctx.dvs and isShinyDVs(ctx.dvs) then
+        ctx.dvs.speed=9
+        ctx.dvs.hp=hpDV(ctx.dvs)
+      end
+      return false
+    end
     return next(ctx)
   end)
 
@@ -366,9 +505,49 @@ return function(mod)
     else
       result=next(ctx)
     end
-    state.pendingWild=nil
     return result
   end)
+
+  -- Finalize the actual constructed Gold wild Pokemon after Mon.new has
+  -- finished. This keeps its stored shiny/gender and DVs in agreement.
+  mod.events:on("battle.started", function(ev)
+    if not ev or ev.kind~="wild" then return end
+    local battle=ev.battle
+    local mon=battle and battle.enemy
+    if mon then applyPendingWildIdentity(mon) end
+  end)
+
+  -- Gen2 Pay Day compatibility for Gen1Recomp builds where EFFECT_PAY_DAY is
+  -- not yet implemented in the Gold battle engine. A landed player Pay Day
+  -- contributes 2 x the user's level, matching the Gen-2 mechanic.
+  mod.events:on("battle.damage_dealt", function(ev)
+    if not enabled("payday_fix") then return end
+    local game=mod.game
+    if not isGold(game) then return end
+    if not ev or ev.moveId~="PAY_DAY" or not ev.battle then return end
+    if ev.user~=ev.battle.player then return end
+    if (ev.damage or 0)<=0 then return end
+    ev.battle._gamesharkPayDay=(ev.battle._gamesharkPayDay or 0)
+      + 2*(ev.user.level or 1)
+    if type(ev.battle.emit)=="function" then
+      ev.battle:emit({kind="message",text="Coins scattered everywhere!"})
+    end
+  end)
+
+  mod.events:on("battle.ended", function(ev)
+    if not enabled("payday_fix") then return end
+    local game=mod.game
+    if not isGold(game) then return end
+    local battle=ev and ev.battle
+    local amount=battle and battle._gamesharkPayDay or 0
+    if amount<=0 then return end
+    battle._gamesharkPayDay=nil
+    if ev.result~="win" then return end
+    local save=game and game.save
+    if not (save and save.player) then return end
+    save.player.money=math.min(999999,(save.player.money or 0)+amount)
+  end)
+
   mod.hooks:wrap("catch.rate", function(next,ball,mon,def,opts)
     if trainerCatchInProgress then return true,255 end
     local battle=opts and opts.battle
@@ -406,7 +585,8 @@ return function(mod)
   mod.exports.list=function(game)
     local gold=isGold(game); local out={}
     for _,c in ipairs(CHEATS) do
-      local supported=not (gold and c.gen2==false)
+      local supported=not ((gold and c.gen2==false)
+        or ((not gold) and c.gen2only==true))
       out[#out+1]={name=c.name,effect=c.effect,code=gold and c.gold or c.gen1,enabled=enabled(c.effect),supported=supported}
     end
     return out
@@ -469,7 +649,8 @@ return function(mod)
   mod.content.screens:register(MAIN_SCREEN,{new=function(game)
     local gold=isGold(game); local items={}
     for _,c in ipairs(CHEATS) do
-      local supported=not (gold and c.gen2==false)
+      local supported=not ((gold and c.gen2==false)
+        or ((not gold) and c.gen2only==true))
       if supported then items[#items+1]={label=c.name,right=enabled(c.effect) and "ON" or "OFF",value=c.effect,kind="toggle"} end
     end
     items[#items+1]={label="PICK POKEMON",kind="picker"}

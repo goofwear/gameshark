@@ -1,12 +1,12 @@
 {
   "id": "gameshark_compat",
   "name": "GameShark Compatibility",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
   "category": "TOOL",
-  "game_version": ">=0.1.79 <0.2.0 || =0.0.0-dev",
+  "game_version": ">=0.1.79 || =0.0.0-dev",
   "games": [
     "gen1",
     "gen2"
@@ -15,6 +15,6 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat menu for Gen1Recomp Gen 1 and Gen 2, with Gold shiny/gender Wild Pick and optional first-person compatibility.",
+  "description": "Universal GameShark-style cheat menu for Gen1Recomp Gen 1 and Gen 2, with persistent Gold shiny/gender Wild Pick and Gen 2 Pay Day compatibility.",
   "github": "goofwear/gameshark"
 }

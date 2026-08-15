@@ -7,5 +7,5 @@ return {
     added = { "Pokemon Gold / Gen 2 support", "Per-generation save handling", "Universal wild Pokemon picker" },
     known = { "Safari cheats are Gen 1 only.", "Gold support targets Gen1Recomp 0.1.79+ and current dev API." }
   },
-  compat = { engine = ">=0.1.79 <0.2.0 || =0.0.0-dev", modApi = 2 },
+  compat = { engine = ">=0.1.79 || =0.0.0-dev", modApi = 2 },
 }

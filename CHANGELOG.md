@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.4] - 2026-08-15
+
+### Fixed
+- Fixed Gold Wild Pick shinies on Gen1Recomp 0.1.93 by writing persistent,
+  authentic Gen-2 shiny DVs instead of relying only on the hook return value.
+- Keeps stored shiny/gender identity synchronized with the generated DVs.
+
+### Added
+- Added Gen-2-only **PAY DAY FIX**, enabled by default, to restore Gold's
+  missing Pay Day money accumulation/payout behavior.
+
+### Compatibility
+- Removed the `<0.2.0` engine-version ceiling.
+- New supported engine expression: `>=0.1.79 || =0.0.0-dev`.
+- Author remains `goofwear`; GitHub updater remains `goofwear/gameshark`.
+
+
 ## [0.5.3] - 2026-08-14
 
 ### Fixed

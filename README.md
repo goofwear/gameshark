@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.5.3
+# GameShark Compatibility v0.5.4
 
 **Author: goofwear**
 
@@ -48,7 +48,7 @@ This version does not use `io`, `os.getenv`, `os.execute`, `love.filesystem`, `d
 
 ## Installation
 
-Copy the `gen1recomp_gameshark_v0.5.3_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
+Copy the `gen1recomp_gameshark_v0.5.4_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
 
 Delete older GameShark Compatibility folders first so only one version is installed.
 
@@ -57,7 +57,7 @@ Delete older GameShark Compatibility folders first so only one version is instal
 Save-data cheats such as items and badges make real changes to the active save. Disabling the cheat does not remove items or badges already granted. Save before experimenting with trainer capture or wall walking.
 
 
-## v0.5.3 fixes
+## v0.5.4 fixes
 
 - Fixed **ONE HIT KO** on Pokemon Gold / Gen 2.
   Gold's `battle.damage` hook uses the active Pokemon tables directly, so the
@@ -73,7 +73,7 @@ Save-data cheats such as items and badges make real changes to the active save. 
 Repository: https://github.com/goofwear/gameshark
 
 
-## v0.5.3 — Gold Wild Pick customization
+## v0.5.4 — Gold Wild Pick customization
 
 When playing Pokemon Gold / Gen 2, **WILD PICK** now has two additional controls:
 
@@ -101,7 +101,7 @@ not have native Pokemon gender or shininess.
 Map bounds remain protected.
 
 
-## v0.5.3 fixes
+## v0.5.4 fixes
 
 - **ALL BADGES on Gold now creates exactly 16 badges**: eight Johto and eight
   Kanto. Numeric duplicate badge aliases left by v0.5.0-v0.5.2 are removed.
@@ -111,3 +111,37 @@ Map bounds remain protected.
   cheats or changing Wild Pick settings.
 - The Pokemon picker also preserves its cursor and scroll position after a
   selection instead of jumping back to the top.
+
+
+## v0.5.4 — Gen1Recomp 0.1.93 compatibility
+
+### Persistent Gold shinies
+Gold Wild Pick no longer relies only on the `shiny.roll` return value.
+When **WILD SHINY = YES**, GameShark now writes an authentic Gen-2 shiny DV
+pattern into the spawned Pokemon and synchronizes its stored shiny/gender
+identity. This keeps the Pokemon shiny after capture and later recalculation.
+
+`WILD SHINY = NO` likewise breaks a naturally shiny DV pattern so the choice
+remains non-shiny.
+
+### Gen 2 Pay Day compatibility
+Gen1Recomp 0.1.93 contains Pay Day in Gold's move data but currently lacks the
+Gen-2 Pay Day battle effect. **PAY DAY FIX** is therefore available on Gold
+and is enabled by default.
+
+A successful player Pay Day hit accumulates `2 x user level` money. The
+accumulated amount is added to the player's money after winning the battle.
+The option can be disabled from the GameShark menu if a later engine version
+implements Pay Day itself.
+
+### Engine version range
+The old upper bound `<0.2.0` has been removed. The manifest now uses:
+
+```text
+>=0.1.79 || =0.0.0-dev
+```
+
+This prevents the mod from being rejected merely because Gen1Recomp reaches
+0.2.0 or later. `modApi = 2` remains declared. Future engine/API changes can
+still require a GameShark update even though the manifest no longer imposes
+an artificial upper version ceiling.
