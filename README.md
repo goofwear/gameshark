@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.5.4
+# GameShark Compatibility v0.5.5
 
 **Author: goofwear**
 
@@ -48,7 +48,7 @@ This version does not use `io`, `os.getenv`, `os.execute`, `love.filesystem`, `d
 
 ## Installation
 
-Copy the `gen1recomp_gameshark_v0.5.4_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
+Copy the `gen1recomp_gameshark_v0.5.5_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
 
 Delete older GameShark Compatibility folders first so only one version is installed.
 
@@ -57,7 +57,7 @@ Delete older GameShark Compatibility folders first so only one version is instal
 Save-data cheats such as items and badges make real changes to the active save. Disabling the cheat does not remove items or badges already granted. Save before experimenting with trainer capture or wall walking.
 
 
-## v0.5.4 fixes
+## v0.5.5 fixes
 
 - Fixed **ONE HIT KO** on Pokemon Gold / Gen 2.
   Gold's `battle.damage` hook uses the active Pokemon tables directly, so the
@@ -73,7 +73,7 @@ Save-data cheats such as items and badges make real changes to the active save. 
 Repository: https://github.com/goofwear/gameshark
 
 
-## v0.5.4 — Gold Wild Pick customization
+## v0.5.5 — Gold Wild Pick customization
 
 When playing Pokemon Gold / Gen 2, **WILD PICK** now has two additional controls:
 
@@ -101,7 +101,7 @@ not have native Pokemon gender or shininess.
 Map bounds remain protected.
 
 
-## v0.5.4 fixes
+## v0.5.5 fixes
 
 - **ALL BADGES on Gold now creates exactly 16 badges**: eight Johto and eight
   Kanto. Numeric duplicate badge aliases left by v0.5.0-v0.5.2 are removed.
@@ -113,7 +113,7 @@ Map bounds remain protected.
   selection instead of jumping back to the top.
 
 
-## v0.5.4 — Gen1Recomp 0.1.93 compatibility
+## v0.5.5 — Gen1Recomp 0.1.93 compatibility
 
 ### Persistent Gold shinies
 Gold Wild Pick no longer relies only on the `shiny.roll` return value.
@@ -145,3 +145,36 @@ This prevents the mod from being rejected merely because Gen1Recomp reaches
 0.2.0 or later. `modApi = 2` remains declared. Future engine/API changes can
 still require a GameShark update even though the manifest no longer imposes
 an artificial upper version ceiling.
+
+
+## v0.5.5
+
+### Fixed: Steal Trainer Pokemon on Red / Blue / Yellow
+
+Gen 1's native capture path ends a caught Pokemon battle with the result
+`caught`. That is correct for a wild battle, but a trainer encounter only marks
+the trainer NPC defeated when the result is `win`.
+
+When **STEAL TRAINER** is enabled, v0.5.5 now:
+
+1. uses the normal capture animation and forced catch;
+2. keeps the captured Pokemon in the normal party/PC flow;
+3. preserves Pokedex registration and nickname handling;
+4. restores the battle's trainer identity after storage;
+5. changes that stolen-trainer capture result from `caught` to `win`;
+6. returns to the overworld with the trainer marked defeated instead of
+   immediately restarting the encounter.
+
+Gold's existing trainer-capture implementation is unchanged.
+
+### Added: Max Coins
+
+**MAX COINS** keeps the Game Corner Coin Case at **9,999 coins** while enabled.
+It supports both generations:
+
+- Gen 1: `save.coins = 9999`
+- Gen 2 / Gold: `save.player.coins = 9999`
+
+The cheat does not grant a Coin Case item; it fills the player's existing coin
+balance. Because the balance is refreshed continuously, purchased prizes and
+slot-machine bets are effectively unlimited while the cheat is ON.

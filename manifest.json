@@ -1,7 +1,7 @@
 {
   "id": "gameshark_compat",
   "name": "GameShark Compatibility",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
@@ -15,6 +15,6 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat menu for Gen1Recomp Gen 1 and Gen 2, with persistent Gold shiny/gender Wild Pick and Gen 2 Pay Day compatibility.",
+  "description": "Universal GameShark-style cheat menu for Gen1Recomp Gen 1 and Gen 2, including fixed trainer Pokemon capture and maximum Game Corner coins.",
   "github": "goofwear/gameshark"
 }

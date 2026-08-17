@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.5.4
+-- GameShark Compatibility 0.5.5
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -14,6 +14,7 @@ local CHEATS = {
   { name="NO BATTLES", effect="no_encounters", gen1="01033CD1", gold="01000BD2" },
   { name="MASTER BALL", effect="master_ball", gen1="01017CCF", gold="0101FDD5" },
   { name="MAX MONEY", effect="cash", gen1="019947D3", gold="019973D5" },
+  { name="MAX COINS", effect="coins", gen1=nil, gold=nil },
   { name="RARE CANDY", effect="rare_candy", gen1="01287CCF", gold="0120ABD5" },
   { name="SLOT 1 HP", effect="party_hp", gen1="01FF16D0", gold="01FF4CDA" },
   { name="ALL BADGES", effect="badges", gen1="01FF56D3", gold="01FF7CD5" },
@@ -158,17 +159,46 @@ return function(mod)
   end
   local function patchGen1Trainer(b)
     if b._gamesharkThrowInstalled or b.kind~="trainer" then return end
-    b._gamesharkThrowInstalled=true; b._gamesharkOriginalThrowBall=b.throwBall
+
+    b._gamesharkThrowInstalled=true
+    b._gamesharkOriginalThrowBall=b.throwBall
+    b._gamesharkOriginalStoreCaughtMon=b.storeCaughtMon
+
     b.throwBall=function(self,ball)
-      self._gamesharkStealActive=true; self._gamesharkOriginalKind=self.kind; self.kind="wild"
+      -- The stock Gen-1 routine blocks balls whenever kind ~= "wild".
+      -- Switch only this trainer battle into the catchable path.  The
+      -- storeCaughtMon wrapper below restores trainer identity before finish.
+      self._gamesharkStealActive=true
+      self._gamesharkOriginalKind=self.kind
+      self.kind="wild"
       return self:_gamesharkOriginalThrowBall(ball)
+    end
+
+    b.storeCaughtMon=function(self)
+      -- Let Gen1Recomp do every normal capture side effect first: party/box,
+      -- Pokedex, OT, nickname prompt and pokemon.caught event.  Vanilla then
+      -- sets result="caught".  For a stolen trainer Pokemon that result is
+      -- wrong: trainer encounter continuations only mark the NPC defeated on
+      -- "win", otherwise the same trainer sees the player and starts again.
+      local result=self:_gamesharkOriginalStoreCaughtMon()
+      if self._gamesharkStealActive then
+        self.kind=self._gamesharkOriginalKind or "trainer"
+        self.result="win"
+        self._gamesharkStealActive=nil
+        if type(self.playVictoryMusic)=="function" then self:playVictoryMusic() end
+      end
+      return result
     end
   end
 
   local function unpatchGen1Trainer(b)
     if b and b._gamesharkThrowInstalled and not b._gamesharkStealActive then
-      b.throwBall=nil; b._gamesharkOriginalThrowBall=nil
-      b._gamesharkThrowInstalled=nil; b._gamesharkOriginalKind=nil
+      b.throwBall=nil
+      b.storeCaughtMon=nil
+      b._gamesharkOriginalThrowBall=nil
+      b._gamesharkOriginalStoreCaughtMon=nil
+      b._gamesharkThrowInstalled=nil
+      b._gamesharkOriginalKind=nil
     end
   end
 
@@ -413,7 +443,24 @@ return function(mod)
     installBattleArtCompat()
     local save=game and game.save
     if save then
-      if enabled("cash") then if isGold(game) then save.player.money=999999 else save.money=999999 end end
+      if enabled("cash") then
+        if isGold(game) then
+          save.player=save.player or {}
+          save.player.money=999999
+        else
+          save.money=999999
+        end
+      end
+      if enabled("coins") then
+        -- Both generations use a 4-digit Coin Case capped at 9,999.
+        -- Keep it full every input step, making Game Corner spending infinite.
+        if isGold(game) then
+          save.player=save.player or {}
+          save.player.coins=9999
+        else
+          save.coins=9999
+        end
+      end
       if enabled("master_ball") then ensureItem(save,"MASTER_BALL",99) end
       if enabled("rare_candy") then ensureItem(save,"RARE_CANDY",99) end
       if enabled("badges") then grantBadges(save) end

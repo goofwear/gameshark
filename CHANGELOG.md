@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.5] - 2026-08-17
+
+### Fixed
+- Fixed **STEAL TRAINER** on Red, Blue and Yellow so a successful stolen-Pokemon
+  capture resolves the trainer encounter as a win after the normal capture
+  storage flow.
+- The captured Pokemon is retained and the trainer NPC is marked defeated,
+  preventing the same trainer from immediately starting the battle again.
+- Restores the battle's original trainer identity before teardown.
+
+### Added
+- Added **MAX COINS** for both Gen 1 and Gen 2.
+- Keeps the Game Corner Coin Case at the native maximum of 9,999 while enabled.
+
+
 ## [0.5.4] - 2026-08-15
 
 ### Fixed
