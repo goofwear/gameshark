@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.6] - 2026-08-17
+
+### Added
+- Added **INFINITE PP** for Red, Blue, Yellow and Gold.
+- Player move PP is restored to its true maximum in battle and never runs out.
+- Infinite PP does not refill the opponent's moves.
+- Added **PP UP x99**, which maintains 99 normal PP Up items in the bag.
+
+
 ## [0.5.5] - 2026-08-17
 
 ### Fixed

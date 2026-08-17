@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.5.5
+-- GameShark Compatibility 0.5.6
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -15,6 +15,8 @@ local CHEATS = {
   { name="MASTER BALL", effect="master_ball", gen1="01017CCF", gold="0101FDD5" },
   { name="MAX MONEY", effect="cash", gen1="019947D3", gold="019973D5" },
   { name="MAX COINS", effect="coins", gen1=nil, gold=nil },
+  { name="INFINITE PP", effect="infinite_pp", gen1=nil, gold=nil },
+  { name="PP UP x99", effect="pp_up", gen1=nil, gold=nil },
   { name="RARE CANDY", effect="rare_candy", gen1="01287CCF", gold="0120ABD5" },
   { name="SLOT 1 HP", effect="party_hp", gen1="01FF16D0", gold="01FF4CDA" },
   { name="ALL BADGES", effect="badges", gen1="01FF56D3", gold="01FF7CD5" },
@@ -100,6 +102,70 @@ return function(mod)
       save.bagOrder=save.bagOrder or {}
       local found=false; for _,v in ipairs(save.bagOrder) do if v==id then found=true break end end
       if not found then table.insert(save.bagOrder,id) end
+    end
+  end
+
+  -- Restore one player move to its real maximum PP.
+  --
+  -- Gen 1 derives maximum PP from the move's base PP plus PP Ups.
+  -- Gen 2 stores the computed maximum directly in move.maxPp.
+  local function refillMovePP(game,mv,gold)
+    if type(mv)~="table" or not mv.id then return end
+    local maxPP
+    if gold then
+      maxPP=mv.maxPp
+      if not maxPP then
+        local def=game and game.data and game.data.moves and game.data.moves[mv.id]
+        if def and def.pp then
+          local bonus=math.min(math.floor(def.pp/5),7)
+          maxPP=def.pp+(mv.ppUps or 0)*bonus
+          mv.maxPp=maxPP
+        end
+      end
+    else
+      local def=game and game.data and game.data.moves and game.data.moves[mv.id]
+      if def and def.pp then
+        maxPP=def.pp+(mv.ppUps or 0)*math.floor(def.pp/5)
+      end
+    end
+    if maxPP and maxPP>0 then mv.pp=maxPP end
+  end
+
+  local function refillMonPP(game,mon,gold)
+    if type(mon)~="table" or type(mon.moves)~="table" then return end
+    for _,mv in ipairs(mon.moves) do refillMovePP(game,mv,gold) end
+  end
+
+  -- Keep both the save-party copy and the currently active battle copy full.
+  -- Gen 1 uses a battler.curMoves working set; Gold battles directly reference
+  -- the active party mon's moves.
+  local function refillPlayerPP(game)
+    if not game then return end
+    local gold=isGold(game)
+    local save=game.save
+    if save and type(save.party)=="table" then
+      for _,mon in ipairs(save.party) do refillMonPP(game,mon,gold) end
+    end
+
+    if gold then
+      for _,screen in ipairs(goldBattleScreens(game)) do
+        local battle=screen.battle
+        if battle then
+          refillMonPP(game,battle.player,true)
+        end
+      end
+    else
+      for _,battle in ipairs(gen1BattleStates(game)) do
+        if battle.player then
+          -- Active Gen-1 PP lives in curMoves while the battle is running.
+          if type(battle.player.curMoves)=="table" then
+            for _,mv in ipairs(battle.player.curMoves) do
+              refillMovePP(game,mv,false)
+            end
+          end
+          refillMonPP(game,battle.player.mon,false)
+        end
+      end
     end
   end
 
@@ -463,6 +529,8 @@ return function(mod)
       end
       if enabled("master_ball") then ensureItem(save,"MASTER_BALL",99) end
       if enabled("rare_candy") then ensureItem(save,"RARE_CANDY",99) end
+      if enabled("pp_up") then ensureItem(save,"PP_UP",99) end
+      if enabled("infinite_pp") then refillPlayerPP(game) end
       if enabled("badges") then grantBadges(save) end
       if enabled("party_hp") then
         local mon=save.party and save.party[1]
@@ -553,6 +621,29 @@ return function(mod)
       result=next(ctx)
     end
     return result
+  end)
+
+  -- Both Gen 1 and Gen 2 emit battle.move_used after normal PP consumption.
+  -- Refill the player's active move immediately, before the move effect
+  -- resolves. Called/continuation moves do not need special handling because
+  -- the full active move set is restored here.
+  mod.events:on("battle.move_used", function(ev)
+    if not enabled("infinite_pp") or type(ev)~="table" then return end
+    local game=mod.game
+    local battle=ev.battle
+    local user=ev.user
+    local playerSide=(ev.side=="player") or (type(user)=="table" and user.isPlayer==true)
+    if not playerSide then return end
+
+    if isGold(game) then
+      refillMonPP(game,user,true)
+      if battle then refillMonPP(game,battle.player,true) end
+    else
+      if type(user)=="table" and type(user.curMoves)=="table" then
+        for _,mv in ipairs(user.curMoves) do refillMovePP(game,mv,false) end
+      end
+      if type(user)=="table" then refillMonPP(game,user.mon,false) end
+    end
   end)
 
   -- Finalize the actual constructed Gold wild Pokemon after Mon.new has
