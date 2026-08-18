@@ -1,10 +1,12 @@
--- GameShark Compatibility 0.5.8
+-- GameShark Compatibility 0.5.9
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
 
 local MAIN_SCREEN = "GameSharkCompat"
 local PICK_SCREEN = "GameSharkPokemonPicker"
+local WILD_SCREEN = "GameSharkWildPokemon"
+local LEVEL_SCREEN = "GameSharkWildLevel"
 
 local GENDER_CHOICES = { "random", "male", "female" }
 local SHINY_CHOICES = { "random", "yes", "no" }
@@ -52,12 +54,15 @@ return function(mod)
   local state = {
     active={}, selectedSpecies="PIKACHU",
     wildGender="random", wildShiny="random",
+    wildLevel=nil, -- nil = AUTO / preserve the game's normal encounter level
     pendingWild=nil,
   }
 
   local uiPos = {
     mainIndex = 1, mainScroll = 0,
+    wildIndex = 1, wildScroll = 0,
     pickIndex = 1, pickScroll = 0,
+    levelIndex = 1, levelScroll = 0,
   }
   if type(mod.save)=="table" then
     if type(mod.save.activeEffects)=="table" then state.active=mod.save.activeEffects end
@@ -67,6 +72,10 @@ return function(mod)
     end
     if mod.save.wildShiny=="yes" or mod.save.wildShiny=="no" or mod.save.wildShiny=="random" then
       state.wildShiny=mod.save.wildShiny
+    end
+    if type(mod.save.wildLevel)=="number"
+       and mod.save.wildLevel>=1 and mod.save.wildLevel<=100 then
+      state.wildLevel=math.floor(mod.save.wildLevel)
     end
     -- migrate v0.4.x code-keyed state
     if type(mod.save.active)=="table" then
@@ -90,6 +99,7 @@ return function(mod)
       mod.save.selectedSpecies=state.selectedSpecies
       mod.save.wildGender=state.wildGender
       mod.save.wildShiny=state.wildShiny
+      mod.save.wildLevel=state.wildLevel
     end
   end
   local function enabled(effect) return state.active[effect]==true end
@@ -620,9 +630,15 @@ return function(mod)
     local r=next(def,ctx)
     if r and enabled("wild_pick") and state.selectedSpecies then
       r.species=state.selectedSpecies
+
+      -- AUTO leaves the encounter's native level alone. A selected level
+      -- overrides only the level after the normal encounter slot has rolled.
+      if state.wildLevel then
+        r.level=state.wildLevel
+      end
+
       -- Gold constructs the actual Mon after the encounter roll. Carry these
-      -- choices only into that next matching build; shiny.roll runs before
-      -- gender.roll, which clears the marker after both have had their say.
+      -- choices into that next matching build for gender/shiny finalization.
       local game=mod.game
       if isGold(game) and (state.wildGender~="random" or state.wildShiny~="random") then
         state.pendingWild={ species=state.selectedSpecies, level=r.level }
@@ -834,6 +850,19 @@ return function(mod)
     if value~="random" and value~="yes" and value~="no" then return false,"invalid shiny choice" end
     state.wildShiny=value; persist(); return true
   end
+  mod.exports.getWildLevel=function() return state.wildLevel end
+  mod.exports.setWildLevel=function(value)
+    if value==nil or value=="auto" then
+      state.wildLevel=nil
+      persist()
+      return true
+    end
+    local n=tonumber(value)
+    if not n or n<1 or n>100 then return false,"level must be AUTO or 1-100" end
+    state.wildLevel=math.floor(n)
+    persist()
+    return true
+  end
 
   mod.content.screens:register(PICK_SCREEN,{new=function(game)
     local items={}
@@ -856,7 +885,7 @@ return function(mod)
         if selectedGenderless() then state.wildGender="random" end
         persist()
         current:close()
-        mod.ui.push(game,MAIN_SCREEN)
+        mod.ui.push(game,WILD_SCREEN)
       end
     })
 
@@ -865,26 +894,150 @@ return function(mod)
     return menu
   end})
 
+  mod.content.screens:register(LEVEL_SCREEN,{new=function(game)
+    local items={{label="AUTO",right=state.wildLevel==nil and "*" or "",value=nil}}
+    for level=1,100 do
+      items[#items+1]={
+        label="LEVEL "..tostring(level),
+        right=state.wildLevel==level and "*" or "",
+        value=level
+      }
+    end
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"WILD LEVEL",items,{
+      pageJump=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.levelIndex=current.index or uiPos.levelIndex
+        uiPos.levelScroll=current.scroll or uiPos.levelScroll
+        state.wildLevel=item.value
+        persist()
+        current:close()
+        mod.ui.push(game,WILD_SCREEN)
+      end
+    })
+    menu.index=math.max(1,math.min(uiPos.levelIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.levelScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(WILD_SCREEN,{new=function(game)
+    local gold=isGold(game)
+    local def=selectedDef()
+    local speciesName=(def and def.name) or state.selectedSpecies
+    local items={
+      {
+        label="ENABLE WILD PICK",
+        right=enabled("wild_pick") and "ON" or "OFF",
+        kind="wild_toggle"
+      },
+      {
+        label="POKEMON",
+        right=speciesName,
+        kind="picker"
+      },
+      {
+        label="LEVEL",
+        right=state.wildLevel and tostring(state.wildLevel) or "AUTO",
+        kind="level"
+      },
+    }
+
+    if gold then
+      items[#items+1]={
+        label="GENDER",
+        right=selectedGenderless() and "GENDERLESS"
+          or (state.wildGender=="random" and "RANDOM" or string.upper(state.wildGender)),
+        kind="gender"
+      }
+      items[#items+1]={
+        label="SHINY",
+        right=state.wildShiny=="random" and "RANDOM" or string.upper(state.wildShiny),
+        kind="shiny"
+      }
+    end
+
+    items[#items+1]={label="BACK",kind="back"}
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"WILD POKEMON",items,{
+      pageJump=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.wildIndex=current.index or uiPos.wildIndex
+        uiPos.wildScroll=current.scroll or uiPos.wildScroll
+
+        if item.kind=="wild_toggle" then
+          setEnabled("wild_pick",not enabled("wild_pick"))
+          current:close()
+          mod.ui.push(game,WILD_SCREEN)
+          return
+        end
+
+        if item.kind=="picker" then
+          current:close()
+          mod.ui.push(game,PICK_SCREEN)
+          return
+        end
+
+        if item.kind=="level" then
+          current:close()
+          mod.ui.push(game,LEVEL_SCREEN)
+          return
+        end
+
+        if item.kind=="gender" then
+          if not selectedGenderless() then
+            state.wildGender=cycleChoice(state.wildGender,GENDER_CHOICES)
+            persist()
+          end
+          current:close()
+          mod.ui.push(game,WILD_SCREEN)
+          return
+        end
+
+        if item.kind=="shiny" then
+          state.wildShiny=cycleChoice(state.wildShiny,SHINY_CHOICES)
+          persist()
+          current:close()
+          mod.ui.push(game,WILD_SCREEN)
+          return
+        end
+
+        if item.kind=="back" then
+          current:close()
+          mod.ui.push(game,MAIN_SCREEN)
+          return
+        end
+      end
+    })
+
+    menu.index=math.max(1,math.min(uiPos.wildIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.wildScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
   mod.content.screens:register(MAIN_SCREEN,{new=function(game)
     local gold=isGold(game); local items={}
     for _,c in ipairs(CHEATS) do
       local supported=not ((gold and c.gen2==false)
         or ((not gold) and c.gen2only==true))
-      if supported then items[#items+1]={label=c.name,right=enabled(c.effect) and "ON" or "OFF",value=c.effect,kind="toggle"} end
+      -- Wild Pick now has its own self-contained setup screen.
+      if supported and c.effect~="wild_pick" then
+        items[#items+1]={
+          label=c.name,
+          right=enabled(c.effect) and "ON" or "OFF",
+          value=c.effect,
+          kind="toggle"
+        }
+      end
     end
-    items[#items+1]={label="PICK POKEMON",kind="picker"}
-    if gold then
-      items[#items+1]={
-        label="WILD GENDER",
-        right=selectedGenderless() and "N/A" or (state.wildGender=="random" and "RND" or string.upper(state.wildGender:sub(1,1))),
-        kind="gender"
-      }
-      items[#items+1]={
-        label="WILD SHINY",
-        right=state.wildShiny=="random" and "RND" or string.upper(state.wildShiny),
-        kind="shiny"
-      }
-    end
+    items[#items+1]={
+      label="WILD POKEMON",
+      right=enabled("wild_pick") and "ON >" or "OFF >",
+      kind="wild_menu"
+    }
     items[#items+1]={label="USE SURFBOARD",kind="surfboard"}
     local menu
     menu=mod.ui.ListMenu.new(game,gold and "GAMESHARK G2" or "GAMESHARK G1",items,{
@@ -893,21 +1046,14 @@ return function(mod)
       if not item then return end
       uiPos.mainIndex=current.index or uiPos.mainIndex
       uiPos.mainScroll=current.scroll or uiPos.mainScroll
-      if item.kind=="gender" then
-        if not selectedGenderless() then
-          state.wildGender=cycleChoice(state.wildGender,GENDER_CHOICES)
-          persist()
-        end
-        current:close(); mod.ui.push(game,MAIN_SCREEN); return
-      end
-      if item.kind=="shiny" then
-        state.wildShiny=cycleChoice(state.wildShiny,SHINY_CHOICES)
-        persist(); current:close(); mod.ui.push(game,MAIN_SCREEN); return
+      if item.kind=="wild_menu" then
+        current:close()
+        mod.ui.push(game,WILD_SCREEN)
+        return
       end
       if item.kind=="surfboard" then
         current:close(); local ok=useSurfboard(game); if not ok then mod.ui.push(game,MAIN_SCREEN) end; return
       end
-      if item.kind=="picker" then current:close(); mod.ui.push(game,PICK_SCREEN); return end
       setEnabled(item.value,not enabled(item.value))
       current:close()
       mod.ui.push(game,MAIN_SCREEN)

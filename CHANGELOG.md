@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.5.9] - 2026-08-18
+
+### Added
+- Added **Wild Level** selection with `AUTO` plus levels 1-100.
+- `AUTO` preserves the level produced by the game's normal encounter table.
+- Manual level selection overrides only the resulting wild Pokémon level.
+- Added a dedicated **WILD POKEMON** setup submenu.
+
+### UI
+- Consolidated Wild Pick configuration into one self-explanatory screen:
+  Enable, Pokémon, Level, Gender, and Shiny.
+- Main GameShark menu now shows one `WILD POKEMON  ON/OFF >` entry instead of
+  multiple scattered Wild Pick controls.
+- Gen 2-only Gender and Shiny settings appear only on Gold.
+- Added cursor/scroll memory for both the Wild Pokémon setup and level picker.
+- Existing `wild_pick` effect/save state remains compatible.
+
+
 ## [0.5.8] - 2026-08-17
 
 ### Fixed

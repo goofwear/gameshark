@@ -1,7 +1,7 @@
 {
   "id": "GameShark",
   "name": "GameShark Compatibility",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
@@ -15,6 +15,6 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat menu for Gen1Recomp Gen 1 and Gen 2, including trainer Pokemon capture, max Game Corner coins, Infinite PP, and 99 PP Ups.",
+  "description": "Universal GameShark-style cheat menu for Gen1Recomp Gen 1 and Gen 2, with a simplified Wild Pokemon setup including species, level, gender, and shiny controls.",
   "github": "goofwear/gameshark"
 }

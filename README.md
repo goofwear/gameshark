@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.5.8
+# GameShark Compatibility v0.5.9
 
 **Author: goofwear**
 
@@ -48,7 +48,7 @@ This version does not use `io`, `os.getenv`, `os.execute`, `love.filesystem`, `d
 
 ## Installation
 
-Copy the `gen1recomp_gameshark_v0.5.8_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
+Copy the `gen1recomp_gameshark_v0.5.9_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
 
 Delete older GameShark Compatibility folders first so only one version is installed.
 
@@ -57,7 +57,7 @@ Delete older GameShark Compatibility folders first so only one version is instal
 Save-data cheats such as items and badges make real changes to the active save. Disabling the cheat does not remove items or badges already granted. Save before experimenting with trainer capture or wall walking.
 
 
-## v0.5.8 fixes
+## v0.5.9 fixes
 
 - Fixed **ONE HIT KO** on Pokemon Gold / Gen 2.
   Gold's `battle.damage` hook uses the active Pokemon tables directly, so the
@@ -73,7 +73,7 @@ Save-data cheats such as items and badges make real changes to the active save. 
 Repository: https://github.com/goofwear/gameshark
 
 
-## v0.5.8 — Gold Wild Pick customization
+## v0.5.9 — Gold Wild Pick customization
 
 When playing Pokemon Gold / Gen 2, **WILD PICK** now has two additional controls:
 
@@ -101,7 +101,7 @@ not have native Pokemon gender or shininess.
 Map bounds remain protected.
 
 
-## v0.5.8 fixes
+## v0.5.9 fixes
 
 - **ALL BADGES on Gold now creates exactly 16 badges**: eight Johto and eight
   Kanto. Numeric duplicate badge aliases left by v0.5.0-v0.5.2 are removed.
@@ -113,7 +113,7 @@ Map bounds remain protected.
   selection instead of jumping back to the top.
 
 
-## v0.5.8 — Gen1Recomp 0.1.93 compatibility
+## v0.5.9 — Gen1Recomp 0.1.93 compatibility
 
 ### Persistent Gold shinies
 Gold Wild Pick no longer relies only on the `shiny.roll` return value.
@@ -147,7 +147,7 @@ still require a GameShark update even though the manifest no longer imposes
 an artificial upper version ceiling.
 
 
-## v0.5.8
+## v0.5.9
 
 ### Fixed: Steal Trainer Pokemon on Red / Blue / Yellow
 
@@ -155,7 +155,7 @@ Gen 1's native capture path ends a caught Pokemon battle with the result
 `caught`. That is correct for a wild battle, but a trainer encounter only marks
 the trainer NPC defeated when the result is `win`.
 
-When **STEAL TRAINER** is enabled, v0.5.8 now:
+When **STEAL TRAINER** is enabled, v0.5.9 now:
 
 1. uses the normal capture animation and forced catch;
 2. keeps the captured Pokemon in the normal party/PC flow;
@@ -180,7 +180,7 @@ balance. Because the balance is refreshed continuously, purchased prizes and
 slot-machine bets are effectively unlimited while the cheat is ON.
 
 
-## v0.5.8
+## v0.5.9
 
 ### Added: Infinite PP
 
@@ -206,7 +206,7 @@ UI and PP-Up rules when the player applies one to a move.
 
 ## Mod ID migration
 
-Starting with the clean-ID v0.5.8 package, the manifest ID and installed folder
+Starting with the clean-ID v0.5.9 package, the manifest ID and installed folder
 are both:
 
 ```text
@@ -219,14 +219,14 @@ mods by manifest ID, users upgrading from an older build should remove the old
 Future updates should continue using the `GameShark` ID.
 
 
-## v0.5.8 — Red / Blue / Yellow trainer-capture fix
+## v0.5.9 — Red / Blue / Yellow trainer-capture fix
 
 The extremely long Poké Ball wobble was caused by older universal builds
 forcing the Gen 1 capture seam with `true, 255`. Current Gen1Recomp ultimately
 uses that second value as the shake count, so the ball could visibly wobble
 hundreds of times before the capture finished.
 
-v0.5.8 changes the Gen 1 path:
+v0.5.9 changes the Gen 1 path:
 
 - **STEAL TRAINER** temporarily wraps the active battle's `catchAttempt`.
 - The stolen trainer Pokémon is a deterministic successful catch.
@@ -242,7 +242,7 @@ BattleState capture implementation.
 Gold's working trainer-capture code is unchanged.
 
 
-## v0.5.8 — Infinite HP fix
+## v0.5.9 — Infinite HP fix
 
 The old **SLOT 1 HP** implementation mainly refilled `save.party[1].hp`.
 On newer Gen1Recomp builds that is not sufficient for true in-battle
@@ -262,3 +262,51 @@ While enabled:
 
 This uses the shared Gen 1 battle path and therefore applies to Red, Blue and
 Yellow, as well as the existing Gold support.
+
+
+## v0.5.9 — Wild Pokémon setup redesign
+
+Wild Pick is now grouped into a dedicated **WILD POKEMON** submenu instead of
+scattering species, gender, shiny, and the enable switch across the main
+GameShark list.
+
+The submenu shows:
+
+```text
+WILD POKEMON
+  ENABLE WILD PICK   ON/OFF
+  POKEMON            <selected species>
+  LEVEL              AUTO / 1-100
+  GENDER             RANDOM / MALE / FEMALE / GENDERLESS   [Gold only]
+  SHINY              RANDOM / YES / NO                      [Gold only]
+  BACK
+```
+
+### Wild level
+
+- **AUTO** is the default.
+- AUTO preserves the exact level selected by the game's normal encounter table.
+- Choosing **1 through 100** overrides only the encountered Pokémon's level.
+- Species selection, encounter rate, map, and normal encounter triggering are
+  otherwise unchanged.
+- The level setting is saved per GameShark save and remains selected until
+  changed back to AUTO.
+
+### Cleaner main menu
+
+The main GameShark screen now contains one entry:
+
+```text
+WILD POKEMON   ON >
+```
+
+or:
+
+```text
+WILD POKEMON   OFF >
+```
+
+Selecting it opens the full setup screen. This removes the old separate
+`WILD PICK`, `PICK POKEMON`, `WILD GENDER`, and `WILD SHINY` rows from the main
+list while preserving the same underlying `wild_pick` effect id for existing
+saved settings and external integrations.
