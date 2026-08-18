@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.5.6
+-- GameShark Compatibility 0.5.7
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -229,6 +229,18 @@ return function(mod)
     b._gamesharkThrowInstalled=true
     b._gamesharkOriginalThrowBall=b.throwBall
     b._gamesharkOriginalStoreCaughtMon=b.storeCaughtMon
+    b._gamesharkOriginalCatchAttempt=b.catchAttempt
+
+    -- Gen 1 trainer stealing should be a guaranteed catch, but the second
+    -- result from the capture path is the shake count.  Older builds forced
+    -- true,255 through catch.rate, producing 255 wobble steps on current
+    -- Gen1Recomp.  Intercept the actual attempt instead.
+    b.catchAttempt=function(self,ball,overrideRate)
+      if self._gamesharkStealActive then
+        return true,3
+      end
+      return self:_gamesharkOriginalCatchAttempt(ball,overrideRate)
+    end
 
     b.throwBall=function(self,ball)
       -- The stock Gen-1 routine blocks balls whenever kind ~= "wild".
@@ -261,8 +273,10 @@ return function(mod)
     if b and b._gamesharkThrowInstalled and not b._gamesharkStealActive then
       b.throwBall=nil
       b.storeCaughtMon=nil
+      b.catchAttempt=nil
       b._gamesharkOriginalThrowBall=nil
       b._gamesharkOriginalStoreCaughtMon=nil
+      b._gamesharkOriginalCatchAttempt=nil
       b._gamesharkThrowInstalled=nil
       b._gamesharkOriginalKind=nil
     end
@@ -687,9 +701,9 @@ return function(mod)
   end)
 
   mod.hooks:wrap("catch.rate", function(next,ball,mon,def,opts)
+    -- Gold keeps its working compatibility path here.  Gen 1 trainer
+    -- stealing is handled directly by the live battle's catchAttempt wrapper.
     if trainerCatchInProgress then return true,255 end
-    local battle=opts and opts.battle
-    if enabled("steal_trainer") and battle and battle._gamesharkStealActive then return true,255 end
     return next(ball,mon,def,opts)
   end)
   mod.hooks:wrap("battle.damage", function(next,ctx)

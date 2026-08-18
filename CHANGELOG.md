@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.7] - 2026-08-17
+
+### Fixed
+- Fixed **STEAL TRAINER** on Red, Blue and Yellow causing an extremely long
+  Poké Ball wobble/shake animation.
+- Removed the Gen 1 forced `catch.rate -> true,255` path.
+- Trainer captures now use a deterministic successful `catchAttempt` with
+  the normal three-wobble caught animation.
+- Keeps the v0.5.5 `win` conversion after capture so the Pokémon is retained
+  and the trainer remains defeated.
+- Gold behavior is unchanged.
+
+
 ## [0.5.6] - 2026-08-17
 
 ### Added

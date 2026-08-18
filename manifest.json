@@ -1,7 +1,7 @@
 {
-  "id": "gameshark_compat",
+  "id": "GameShark",
   "name": "GameShark Compatibility",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
