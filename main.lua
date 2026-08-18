@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.5.7
+-- GameShark Compatibility 0.5.8
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -18,7 +18,7 @@ local CHEATS = {
   { name="INFINITE PP", effect="infinite_pp", gen1=nil, gold=nil },
   { name="PP UP x99", effect="pp_up", gen1=nil, gold=nil },
   { name="RARE CANDY", effect="rare_candy", gen1="01287CCF", gold="0120ABD5" },
-  { name="SLOT 1 HP", effect="party_hp", gen1="01FF16D0", gold="01FF4CDA" },
+  { name="INFINITE HP", effect="party_hp", gen1="01FF16D0", gold="01FF4CDA" },
   { name="ALL BADGES", effect="badges", gen1="01FF56D3", gold="01FF7CD5" },
   { name="ONE HIT KO", effect="enemy_hp", gen1="0100E7CF", gold="010000D1" },
   { name="BURN FOE", effect="enemy_burn", gen1="0170E9CF", gold="0100ADD7" },
@@ -547,8 +547,28 @@ return function(mod)
       if enabled("infinite_pp") then refillPlayerPP(game) end
       if enabled("badges") then grantBadges(save) end
       if enabled("party_hp") then
+        -- Keep slot 1 full outside battle for compatibility with the original
+        -- GameShark-style cheat, then also heal the live active battler below.
         local mon=save.party and save.party[1]
-        if mon then mon.hp=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp end
+        if mon then
+          mon.hp=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp
+        end
+
+        if isGold(game) then
+          for _,screen in ipairs(goldBattleScreens(game)) do
+            local active=screen.battle and screen.battle.player
+            if active then
+              active.hp=active.maxHp or (active.stats and active.stats.hp) or active.hp
+            end
+          end
+        else
+          for _,battle in ipairs(gen1BattleStates(game)) do
+            local active=battle.player and battle.player.mon
+            if active then
+              active.hp=active.maxHp or (active.stats and active.stats.hp) or active.hp
+            end
+          end
+        end
       end
       if not isGold(game) and save.safari then
         if enabled("safari_balls") then save.safari.balls=99 end
@@ -563,7 +583,31 @@ return function(mod)
       end
     end
     if enabled("enemy_burn") then burnEnemy(game) end
-    return next(game,dt)
+
+    local result=next(game,dt)
+
+    -- Some residual/status effects write HP directly rather than passing
+    -- through battle.damage. Refill once more after the engine step.
+    if enabled("party_hp") then
+      local save=game and game.save
+      if save and save.party then
+        local mon=save.party[1]
+        if mon then mon.hp=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp end
+      end
+      if isGold(game) then
+        for _,screen in ipairs(goldBattleScreens(game)) do
+          local active=screen.battle and screen.battle.player
+          if active then active.hp=active.maxHp or (active.stats and active.stats.hp) or active.hp end
+        end
+      else
+        for _,battle in ipairs(gen1BattleStates(game)) do
+          local active=battle.player and battle.player.mon
+          if active then active.hp=active.maxHp or (active.stats and active.stats.hp) or active.hp end
+        end
+      end
+    end
+
+    return result
   end)
 
   mod.hooks:wrap("movement.collision", function(next,allowed,ctx)
@@ -706,8 +750,31 @@ return function(mod)
     if trainerCatchInProgress then return true,255 end
     return next(ball,mon,def,opts)
   end)
+  local function damageTargetsPlayer(ctx)
+    if not (ctx and ctx.target) then return false end
+
+    -- Gen 2 uses the active Mon objects directly; Gen 1 uses battler wrappers.
+    if ctx.battle and ctx.battle.player then
+      if ctx.target == ctx.battle.player then return true end
+      if ctx.battle.player.mon and ctx.target == ctx.battle.player.mon then return true end
+    end
+
+    return ctx.target.isPlayer == true
+      or ctx.target.side == "player"
+      or (ctx.target.mon and ctx.target.mon.isPlayer == true)
+  end
+
   mod.hooks:wrap("battle.damage", function(next,ctx)
     local damage,info=next(ctx)
+
+    -- True Infinite HP: stop incoming move damage before the battle engine
+    -- subtracts it or queues a faint.  This is more reliable than merely
+    -- refilling save.party[1] on a later frame.
+    if enabled("party_hp") and damageTargetsPlayer(ctx) then
+      damage=0
+      return damage,info
+    end
+
     if enabled("enemy_hp") and ctx and ctx.user and ctx.target then
       local userPlayer, targetEnemy = false, false
 

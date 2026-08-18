@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.8] - 2026-08-17
+
+### Fixed
+- Reworked **SLOT 1 HP** into a true **INFINITE HP** cheat.
+- Incoming move damage to the player's active Pokemon is now zeroed at the
+  `battle.damage` hook before HP loss/faint processing.
+- Live battle HP is refilled in addition to the saved party copy.
+- Added a post-engine-step refill for residual/status HP writes.
+- Fix targets Red, Blue and Yellow through their shared Gen 1 BattleState path,
+  while retaining Gold support.
+- Preserved the existing `party_hp` effect id so saved toggle state migrates
+  automatically.
+
+
 ## [0.5.7] - 2026-08-17
 
 ### Fixed
