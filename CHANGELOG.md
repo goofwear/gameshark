@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.0] - 2026-08-19
+
+### Added
+- Added **BATTLE NOW** to the Wild Pokemon setup screen.
+- Starts an immediate wild battle with the selected Pokemon and selected
+  level through Gen1Recomp's public `mod.world:startWildBattle()` API.
+- Supports Red, Blue, Yellow, and Gold.
+- Gold Instant Battles honor the existing Gender and Shiny selections.
+- If `LEVEL = AUTO`, choosing BATTLE NOW opens the level selector rather than
+  inventing an arbitrary battle level.
+
+### UI
+- Shortened `ENABLE WILD PICK` to `WILD PICK` to prevent left/right text
+  overlap on the 160px Game Boy menu.
+- Genderless Gold Pokemon display `N/A` in the narrow value column.
+- Preserved cursor/scroll behavior from previous releases.
+
+
 ## [0.5.9] - 2026-08-18
 
 ### Added

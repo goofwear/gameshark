@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.5.9
+-- GameShark Compatibility 0.6.0
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -349,6 +349,32 @@ return function(mod)
       if v==current then return choices[(i % #choices)+1] end
     end
     return choices[1]
+  end
+
+  local function startInstantBattle(game)
+    -- Instant Battle deliberately requires a manual level. AUTO remains the
+    -- "do not override the encounter table" setting for normal Wild Pick.
+    if not state.wildLevel then return false,"set level" end
+    if not (mod.world and type(mod.world.startWildBattle)=="function") then
+      return false,"instant battle requires Gen1Recomp 0.2.0+"
+    end
+
+    local level=state.wildLevel
+
+    -- Gold's Mon constructor runs shiny.roll/gender.roll while the public
+    -- startWildBattle service constructs the enemy. Reuse the same pending
+    -- identity marker as normal Wild Pick so the configured identity applies
+    -- to an instant battle too.
+    if isGold(game) and (state.wildGender~="random" or state.wildShiny~="random") then
+      state.pendingWild={ species=state.selectedSpecies, level=level }
+    end
+
+    local ok,err=mod.world:startWildBattle(state.selectedSpecies,level)
+    if not ok then
+      state.pendingWild=nil
+      return false,err
+    end
+    return true
   end
 
   -- Battle Art 1ST compatibility is OPTIONAL. Nothing in the manifest depends
@@ -863,6 +889,9 @@ return function(mod)
     persist()
     return true
   end
+  mod.exports.startInstantBattle=function(game)
+    return startInstantBattle(game or mod.game)
+  end
 
   mod.content.screens:register(PICK_SCREEN,{new=function(game)
     local items={}
@@ -926,9 +955,12 @@ return function(mod)
     local gold=isGold(game)
     local def=selectedDef()
     local speciesName=(def and def.name) or state.selectedSpecies
+
+    -- Keep labels deliberately compact. ListMenu right-aligns the value, so
+    -- long left labels can collide with the right column on a 160px GB menu.
     local items={
       {
-        label="ENABLE WILD PICK",
+        label="WILD PICK",
         right=enabled("wild_pick") and "ON" or "OFF",
         kind="wild_toggle"
       },
@@ -947,7 +979,10 @@ return function(mod)
     if gold then
       items[#items+1]={
         label="GENDER",
-        right=selectedGenderless() and "GENDERLESS"
+        -- N/A is clearer here than printing the long GENDERLESS value into
+        -- the narrow right column; the Pokemon definition still remains
+        -- natively genderless.
+        right=selectedGenderless() and "N/A"
           or (state.wildGender=="random" and "RANDOM" or string.upper(state.wildGender)),
         kind="gender"
       }
@@ -958,6 +993,11 @@ return function(mod)
       }
     end
 
+    items[#items+1]={
+      label="BATTLE NOW",
+      right=state.wildLevel and ">" or "SET LV",
+      kind="instant"
+    }
     items[#items+1]={label="BACK",kind="back"}
 
     local menu
@@ -1002,6 +1042,26 @@ return function(mod)
           persist()
           current:close()
           mod.ui.push(game,WILD_SCREEN)
+          return
+        end
+
+        if item.kind=="instant" then
+          -- AUTO has a specific meaning for ordinary encounters, so don't
+          -- silently invent an instant-battle level. Send the user straight
+          -- to the level picker the first time instead.
+          if not state.wildLevel then
+            current:close()
+            mod.ui.push(game,LEVEL_SCREEN)
+            return
+          end
+
+          current:close()
+          local ok=startInstantBattle(game)
+          if not ok then
+            -- A busy world/no healthy party/older engine simply returns to
+            -- the setup screen instead of crashing the game.
+            mod.ui.push(game,WILD_SCREEN)
+          end
           return
         end
 
