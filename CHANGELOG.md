@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.1] - 2026-08-19
+
+### Fixed
+- Fixed **BATTLE NOW** doing nothing in Pokemon Gold.
+- Gold Instant Battle now uses Gen1Recomp's supported Gen-2 `start_battle`
+  script verb through `mod.world:queueScript()` instead of the Gen-1-only
+  `startWildBattle()` API.
+- Gold Instant Battle now works from indoor and outdoor maps, provided the
+  player is in a valid overworld state and has a healthy party.
+- Red, Blue and Yellow continue using the Gen-1 `startWildBattle()` service.
+- Gold Gender/Shiny selections remain wired into the Mon-construction path.
+
+
 ## [0.6.0] - 2026-08-19
 
 ### Added

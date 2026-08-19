@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.6.0
+# GameShark Compatibility v0.6.1
 
 **Author: goofwear**
 
@@ -48,7 +48,7 @@ This version does not use `io`, `os.getenv`, `os.execute`, `love.filesystem`, `d
 
 ## Installation
 
-Copy the `gen1recomp_gameshark_v0.6.0_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
+Copy the `gen1recomp_gameshark_v0.6.1_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
 
 Delete older GameShark Compatibility folders first so only one version is installed.
 
@@ -57,7 +57,7 @@ Delete older GameShark Compatibility folders first so only one version is instal
 Save-data cheats such as items and badges make real changes to the active save. Disabling the cheat does not remove items or badges already granted. Save before experimenting with trainer capture or wall walking.
 
 
-## v0.6.0 fixes
+## v0.6.1 fixes
 
 - Fixed **ONE HIT KO** on Pokemon Gold / Gen 2.
   Gold's `battle.damage` hook uses the active Pokemon tables directly, so the
@@ -73,7 +73,7 @@ Save-data cheats such as items and badges make real changes to the active save. 
 Repository: https://github.com/goofwear/gameshark
 
 
-## v0.6.0 — Gold Wild Pick customization
+## v0.6.1 — Gold Wild Pick customization
 
 When playing Pokemon Gold / Gen 2, **WILD PICK** now has two additional controls:
 
@@ -101,7 +101,7 @@ not have native Pokemon gender or shininess.
 Map bounds remain protected.
 
 
-## v0.6.0 fixes
+## v0.6.1 fixes
 
 - **ALL BADGES on Gold now creates exactly 16 badges**: eight Johto and eight
   Kanto. Numeric duplicate badge aliases left by v0.5.0-v0.5.2 are removed.
@@ -113,7 +113,7 @@ Map bounds remain protected.
   selection instead of jumping back to the top.
 
 
-## v0.6.0 — Gen1Recomp 0.1.93 compatibility
+## v0.6.1 — Gen1Recomp 0.1.93 compatibility
 
 ### Persistent Gold shinies
 Gold Wild Pick no longer relies only on the `shiny.roll` return value.
@@ -147,7 +147,7 @@ still require a GameShark update even though the manifest no longer imposes
 an artificial upper version ceiling.
 
 
-## v0.6.0
+## v0.6.1
 
 ### Fixed: Steal Trainer Pokemon on Red / Blue / Yellow
 
@@ -155,7 +155,7 @@ Gen 1's native capture path ends a caught Pokemon battle with the result
 `caught`. That is correct for a wild battle, but a trainer encounter only marks
 the trainer NPC defeated when the result is `win`.
 
-When **STEAL TRAINER** is enabled, v0.6.0 now:
+When **STEAL TRAINER** is enabled, v0.6.1 now:
 
 1. uses the normal capture animation and forced catch;
 2. keeps the captured Pokemon in the normal party/PC flow;
@@ -180,7 +180,7 @@ balance. Because the balance is refreshed continuously, purchased prizes and
 slot-machine bets are effectively unlimited while the cheat is ON.
 
 
-## v0.6.0
+## v0.6.1
 
 ### Added: Infinite PP
 
@@ -206,7 +206,7 @@ UI and PP-Up rules when the player applies one to a move.
 
 ## Mod ID migration
 
-Starting with the clean-ID v0.6.0 package, the manifest ID and installed folder
+Starting with the clean-ID v0.6.1 package, the manifest ID and installed folder
 are both:
 
 ```text
@@ -219,14 +219,14 @@ mods by manifest ID, users upgrading from an older build should remove the old
 Future updates should continue using the `GameShark` ID.
 
 
-## v0.6.0 — Red / Blue / Yellow trainer-capture fix
+## v0.6.1 — Red / Blue / Yellow trainer-capture fix
 
 The extremely long Poké Ball wobble was caused by older universal builds
 forcing the Gen 1 capture seam with `true, 255`. Current Gen1Recomp ultimately
 uses that second value as the shake count, so the ball could visibly wobble
 hundreds of times before the capture finished.
 
-v0.6.0 changes the Gen 1 path:
+v0.6.1 changes the Gen 1 path:
 
 - **STEAL TRAINER** temporarily wraps the active battle's `catchAttempt`.
 - The stolen trainer Pokémon is a deterministic successful catch.
@@ -242,7 +242,7 @@ BattleState capture implementation.
 Gold's working trainer-capture code is unchanged.
 
 
-## v0.6.0 — Infinite HP fix
+## v0.6.1 — Infinite HP fix
 
 The old **SLOT 1 HP** implementation mainly refilled `save.party[1].hp`.
 On newer Gen1Recomp builds that is not sufficient for true in-battle
@@ -264,7 +264,7 @@ This uses the shared Gen 1 battle path and therefore applies to Red, Blue and
 Yellow, as well as the existing Gold support.
 
 
-## v0.6.0 — Wild Pokémon setup redesign
+## v0.6.1 — Wild Pokémon setup redesign
 
 Wild Pick is now grouped into a dedicated **WILD POKEMON** submenu instead of
 scattering species, gender, shiny, and the enable switch across the main
@@ -312,7 +312,7 @@ list while preserving the same underlying `wild_pick` effect id for existing
 saved settings and external integrations.
 
 
-## v0.6.0 — Instant Battle + Wild menu spacing
+## v0.6.1 — Instant Battle + Wild menu spacing
 
 ### Instant Battle
 
@@ -363,3 +363,24 @@ The old `ENABLE WILD PICK` label was too wide once an `ON/OFF` value was drawn
 in the right column. It is now simply `WILD PICK`. `GENDERLESS` was also
 shortened to `N/A` in the value column. These changes keep the Game Boy-width
 menu columns separated instead of allowing text to overlap.
+
+
+## v0.6.1 — Gold Instant Battle fix
+
+v0.6.0 incorrectly called the Gen-1-only `mod.world:startWildBattle()` helper
+for every game. That made Instant Battle work in Red/Blue/Yellow but silently
+return to the menu in Gold.
+
+v0.6.1 selects the proper supported Gen1Recomp API at runtime:
+
+- **Red / Blue / Yellow:** `mod.world:startWildBattle(species, level)`
+- **Gold:** `mod.world:queueScript({{"start_battle", "wild", species, level}})`
+
+Gold's `start_battle` verb is implemented by its own WorldAPI. It constructs a
+native Gen-2 `Mon`, marks the species seen in the Pokédex, and calls Gold's
+`World:startBattle()` path. It does not depend on the current map having a
+natural wild encounter table, so GameShark Instant Battle can be started while
+inside buildings as well as outside.
+
+The selected Gold Gender and Shiny options are prepared before the Gen-2 Mon is
+constructed, so they remain applicable to Instant Battles.

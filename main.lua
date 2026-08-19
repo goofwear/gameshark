@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.6.0
+-- GameShark Compatibility 0.6.1
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -355,21 +355,40 @@ return function(mod)
     -- Instant Battle deliberately requires a manual level. AUTO remains the
     -- "do not override the encounter table" setting for normal Wild Pick.
     if not state.wildLevel then return false,"set level" end
-    if not (mod.world and type(mod.world.startWildBattle)=="function") then
-      return false,"instant battle requires Gen1Recomp 0.2.0+"
-    end
+    if not mod.world then return false,"world API unavailable" end
 
     local level=state.wildLevel
+    local gold=isGold(game)
 
-    -- Gold's Mon constructor runs shiny.roll/gender.roll while the public
-    -- startWildBattle service constructs the enemy. Reuse the same pending
-    -- identity marker as normal Wild Pick so the configured identity applies
-    -- to an instant battle too.
-    if isGold(game) and (state.wildGender~="random" or state.wildShiny~="random") then
+    -- Gold's Mon constructor runs shiny.roll/gender.roll while the Gen-2
+    -- start_battle script verb constructs the enemy. Reuse the same pending
+    -- identity marker as normal Wild Pick so Gender/Shiny apply here too.
+    if gold and (state.wildGender~="random" or state.wildShiny~="random") then
       state.pendingWild={ species=state.selectedSpecies, level=level }
     end
 
-    local ok,err=mod.world:startWildBattle(state.selectedSpecies,level)
+    local ok,err
+    if gold then
+      -- Gen 2 intentionally has no WorldAPI:startWildBattle(). Its supported
+      -- facade exposes the cart-native start_battle verb through queueScript.
+      -- That path builds a src.battle.gen2.Mon and calls Gold's World:startBattle,
+      -- so it works on both indoor and outdoor maps and preserves native Gold
+      -- battle teardown/return behavior.
+      if type(mod.world.queueScript)~="function" then
+        state.pendingWild=nil
+        return false,"Gen 2 battle API unavailable"
+      end
+      ok,err=mod.world:queueScript({
+        {"start_battle","wild",state.selectedSpecies,level}
+      })
+    else
+      -- Gen 1 has a dedicated public startWildBattle helper.
+      if type(mod.world.startWildBattle)~="function" then
+        return false,"Gen 1 battle API unavailable"
+      end
+      ok,err=mod.world:startWildBattle(state.selectedSpecies,level)
+    end
+
     if not ok then
       state.pendingWild=nil
       return false,err
