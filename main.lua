@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.0
+-- GameShark Compatibility 0.7.1
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -83,6 +83,11 @@ return function(mod)
     evKey = nil,
     hexDigits = {0,0,0,0},
   }
+
+  -- Warp on the frame after the Teleport menu closes. Gold otherwise begins
+  -- its map transition while the ListMenu is still the top UI screen.
+  local pendingTeleport=nil
+  local pendingTeleportFrames=0
   if type(mod.save)=="table" then
     if type(mod.save.activeEffects)=="table" then state.active=mod.save.activeEffects end
     if type(mod.save.selectedSpecies)=="string" then state.selectedSpecies=mod.save.selectedSpecies end
@@ -677,8 +682,12 @@ return function(mod)
     return party and party[editor.partySlot] or nil
   end
 
-  local function editorSpeciesDef(mon)
-    return mon and mod.content.pokemon:get(mon.species) or nil
+  local function editorSpeciesDef(mon,game)
+    if not mon then return nil end
+    local data=game and game.data
+    local native=data and data.pokemon and data.pokemon[mon.species]
+    if native then return native end
+    return mod.content.pokemon:get(mon.species)
   end
 
   local function calcGen1One(base,dv,statExp,level,isHp)
@@ -700,8 +709,9 @@ return function(mod)
   }
 
   local function refreshEditedMon(game,mon)
-    local def=editorSpeciesDef(mon)
-    if not (mon and def and def.baseStats) then return false end
+    if not (game and mon) then return false end
+    local def=editorSpeciesDef(mon,game)
+    if not (def and def.baseStats) then return false end
 
     mon.dvs=mon.dvs or {}
     mon.statExp=mon.statExp or {}
@@ -710,12 +720,19 @@ return function(mod)
     local oldMax=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp or 1
     local oldHp=mon.hp or oldMax
     local wasFull=oldHp>=oldMax
-    local level=mon.level or 1
-    local b=def.baseStats
-    local se=mon.statExp
-    local d=mon.dvs
 
     if isGold(game) then
+      -- Use the exact same Gen-2 routine Gold's Summary screen uses.
+      local ok,Mon=pcall(require,"src.battle.gen2.Mon")
+      if ok and Mon and type(Mon.refreshStats)=="function" then
+        Mon.refreshStats(mon,game.data)
+        if wasFull then mon.hp=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp end
+        return true
+      end
+
+      -- Fallback for a restricted engine build.
+      local level=mon.level or 1
+      local b,se,d=def.baseStats,mon.statExp,mon.dvs
       local stats={
         hp=calcGen2One(b.hp,d.hp,se.hp,level,true),
         attack=calcGen2One(b.attack,d.attack,se.attack,level,false),
@@ -727,8 +744,6 @@ return function(mod)
       mon.stats=stats
       mon.maxHp=stats.hp
       mon.hp=wasFull and stats.hp or math.max(0,math.min(oldHp,stats.hp))
-
-      -- DVs are authoritative for these Gen-2 properties.
       mon.shiny=(d.defense==10 and d.speed==10 and d.special==10
         and SHINY_ATK_DV[d.attack]==true)
       local ratio=def.genderRatio
@@ -737,17 +752,34 @@ return function(mod)
       else
         mon.gender=((d.attack or 0)<math.floor(ratio/16)) and "female" or "male"
       end
-    else
-      local stats={
-        hp=calcGen1One(b.hp,d.hp,se.hp,level,true),
-        attack=calcGen1One(b.attack,d.attack,se.attack,level,false),
-        defense=calcGen1One(b.defense,d.defense,se.defense,level,false),
-        speed=calcGen1One(b.speed,d.speed,se.speed,level,false),
-        special=calcGen1One(b.special,d.special,se.special,level,false),
-      }
-      mon.stats=stats
-      mon.hp=wasFull and stats.hp or math.max(0,math.min(oldHp,stats.hp))
+      return true
     end
+
+    -- Gen 1's party Summary does not recalc an existing party stat block on
+    -- every open, so explicitly use the engine's canonical Stats.calc here.
+    local ok,Stats=pcall(require,"src.pokemon.Stats")
+    if ok and Stats and type(Stats.calc)=="function" then
+      mon.stats=Stats.calc(def,mon.level or 1,mon.dvs,mon.statExp)
+      if wasFull then
+        mon.hp=mon.stats.hp
+      else
+        mon.hp=math.max(0,math.min(oldHp,mon.stats.hp))
+      end
+      return true
+    end
+
+    -- Fallback mirrors src/pokemon/Stats.lua.
+    local level=mon.level or 1
+    local b,se,d=def.baseStats,mon.statExp,mon.dvs
+    local stats={
+      hp=calcGen1One(b.hp,d.hp,se.hp,level,true),
+      attack=calcGen1One(b.attack,d.attack,se.attack,level,false),
+      defense=calcGen1One(b.defense,d.defense,se.defense,level,false),
+      speed=calcGen1One(b.speed,d.speed,se.speed,level,false),
+      special=calcGen1One(b.special,d.special,se.special,level,false),
+    }
+    mon.stats=stats
+    mon.hp=wasFull and stats.hp or math.max(0,math.min(oldHp,stats.hp))
     return true
   end
 
@@ -858,6 +890,19 @@ return function(mod)
     if enabled("enemy_burn") then burnEnemy(game) end
 
     local result=next(game,dt)
+
+    if pendingTeleport then
+      if pendingTeleportFrames>0 then
+        pendingTeleportFrames=pendingTeleportFrames-1
+      else
+        local row=pendingTeleport
+        pendingTeleport=nil
+        local ok=teleportTo(game,row)
+        if not ok then
+          mod.ui.push(game,MAIN_SCREEN)
+        end
+      end
+    end
 
     -- Some residual/status effects write HP directly rather than passing
     -- through battle.damage. Refill once more after the engine step.
@@ -1331,9 +1376,11 @@ return function(mod)
         if not item then return end
         uiPos.teleportIndex=current.index or uiPos.teleportIndex
         uiPos.teleportScroll=current.scroll or uiPos.teleportScroll
+        -- Close the GameShark UI first. The actual warp runs on the next
+        -- engine frame so Gold cannot carry this ListMenu through the warp.
+        pendingTeleport=item.value
+        pendingTeleportFrames=1
         current:close()
-        local ok=teleportTo(game,item.value)
-        if not ok then mod.ui.push(game,MAIN_SCREEN) end
       end,
       onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
     })
@@ -1346,7 +1393,7 @@ return function(mod)
     local party=game and game.save and game.save.party or {}
     local items={}
     for i,mon in ipairs(party) do
-      local def=editorSpeciesDef(mon)
+      local def=editorSpeciesDef(mon,game)
       local name=(mon.nickname and mon.nickname~="" and mon.nickname)
         or (def and def.name) or mon.species or ("SLOT "..i)
       items[#items+1]={
@@ -1480,8 +1527,9 @@ return function(mod)
     mon.dvs=mon.dvs or {}
     mon.statExp=mon.statExp or {}
     mon.dvs.hp=hpDv(mon.dvs)
+    refreshEditedMon(game,mon)
 
-    local def=editorSpeciesDef(mon)
+    local def=editorSpeciesDef(mon,game)
     local name=(mon.nickname and mon.nickname~="" and mon.nickname)
       or (def and def.name) or mon.species or "POKEMON"
 
@@ -1506,6 +1554,7 @@ return function(mod)
     items[#items+1]={label="MAX ALL DVS",kind="max_dv"}
     items[#items+1]={label="MAX ALL EVS",kind="max_ev"}
     items[#items+1]={label="ZERO ALL EVS",kind="zero_ev"}
+    items[#items+1]={label="RECALC STATS",kind="recalc"}
     items[#items+1]={label="BACK",kind="back"}
 
     local menu
@@ -1541,6 +1590,10 @@ return function(mod)
         end
         if item.kind=="zero_ev" then
           for _,r in ipairs(EV_KEYS) do mon.statExp[r.key]=0 end
+          refreshEditedMon(game,mon)
+          current:close(); mod.ui.push(game,MON_EDIT_SCREEN); return
+        end
+        if item.kind=="recalc" then
           refreshEditedMon(game,mon)
           current:close(); mod.ui.push(game,MON_EDIT_SCREEN); return
         end

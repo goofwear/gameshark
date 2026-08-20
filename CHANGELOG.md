@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.1] - 2026-08-20
+
+### Fixed
+- Gold Teleport now closes the GameShark menu before the actual warp occurs.
+- DV/EV edits now refresh the Pokemon's displayed stats through Gen1Recomp's
+  native Gen-1/Gen-2 stat calculators.
+- Uses `game.data.pokemon` for the canonical species/base-stat definition.
+- Existing v0.7.0 DV/EV changes are recalculated when the Pokemon editor opens.
+
+### Added
+- Added **RECALC STATS** to the DV/EV editor for explicit verification/repair.
+
+
 ## [0.7.0] - 2026-08-20
 
 ### Added
