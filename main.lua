@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.6.1
+-- GameShark Compatibility 0.7.0
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -7,6 +7,11 @@ local MAIN_SCREEN = "GameSharkCompat"
 local PICK_SCREEN = "GameSharkPokemonPicker"
 local WILD_SCREEN = "GameSharkWildPokemon"
 local LEVEL_SCREEN = "GameSharkWildLevel"
+local TELEPORT_SCREEN = "GameSharkTeleport"
+local PARTY_EDIT_SCREEN = "GameSharkPartyEdit"
+local MON_EDIT_SCREEN = "GameSharkMonEdit"
+local DV_PICK_SCREEN = "GameSharkDvPick"
+local EV_HEX_SCREEN = "GameSharkEvHex"
 
 local GENDER_CHOICES = { "random", "male", "female" }
 local SHINY_CHOICES = { "random", "yes", "no" }
@@ -63,6 +68,20 @@ return function(mod)
     wildIndex = 1, wildScroll = 0,
     pickIndex = 1, pickScroll = 0,
     levelIndex = 1, levelScroll = 0,
+    teleportIndex = 1, teleportScroll = 0,
+    partyEditIndex = 1, partyEditScroll = 0,
+    monEditIndex = 1, monEditScroll = 0,
+    dvPickIndex = 1, dvPickScroll = 0,
+    evHexIndex = 1, evHexScroll = 0,
+  }
+
+  -- Session-local editor state. The actual DV/Stat EXP values live on the
+  -- Pokemon in the game's save; these fields only remember which row is open.
+  local editor = {
+    partySlot = 1,
+    dvKey = nil,
+    evKey = nil,
+    hexDigits = {0,0,0,0},
   }
   if type(mod.save)=="table" then
     if type(mod.save.activeEffects)=="table" then state.active=mod.save.activeEffects end
@@ -558,6 +577,205 @@ return function(mod)
     mon.gender=vanillaGender(def,mon.dvs)
     refreshGoldStats(mon,def)
     state.pendingWild=nil
+  end
+
+
+  ---------------------------------------------------------------------------
+  -- Teleport
+  ---------------------------------------------------------------------------
+
+  local GEN2_TELEPORT_SPAWNS = {
+    "SPAWN_NEW_BARK","SPAWN_CHERRYGROVE","SPAWN_VIOLET","SPAWN_AZALEA",
+    "SPAWN_GOLDENROD","SPAWN_ECRUTEAK","SPAWN_OLIVINE","SPAWN_CIANWOOD",
+    "SPAWN_MAHOGANY","SPAWN_LAKE_OF_RAGE","SPAWN_BLACKTHORN","SPAWN_MT_SILVER",
+    "SPAWN_PALLET","SPAWN_VIRIDIAN","SPAWN_PEWTER","SPAWN_CERULEAN",
+    "SPAWN_ROCK_TUNNEL","SPAWN_VERMILION","SPAWN_LAVENDER","SPAWN_CELADON",
+    "SPAWN_SAFFRON","SPAWN_FUCHSIA","SPAWN_CINNABAR","SPAWN_INDIGO",
+  }
+
+  local function prettyId(id, prefix)
+    local s=tostring(id or "")
+    if prefix and s:sub(1,#prefix)==prefix then s=s:sub(#prefix+1) end
+    return s:gsub("_"," ")
+  end
+
+  local function teleportRows(game)
+    local rows={}
+    if isGold(game) then
+      local landmarks=game and game.data and game.data.gen2Landmarks
+      local spawns=landmarks and landmarks.spawns or {}
+      for _,spawnId in ipairs(GEN2_TELEPORT_SPAWNS) do
+        local sp=spawns[spawnId]
+        if sp and sp.map and sp.x~=nil and sp.y~=nil then
+          rows[#rows+1]={
+            label=prettyId(spawnId,"SPAWN_"),
+            mapId=sp.map, x=sp.x, y=sp.y, facing="down"
+          }
+        end
+      end
+    else
+      local field=game and game.data and game.data.field or {}
+      local warps=field.flyWarps or {}
+      local seen={}
+      for _,mapId in ipairs(field.flyOrder or {}) do
+        local spot=warps[mapId]
+        local standard = mapId=="PALLET_TOWN"
+          or mapId=="CINNABAR_ISLAND"
+          or mapId=="INDIGO_PLATEAU"
+          or mapId:find("_CITY",1,true)
+          or mapId:find("_TOWN",1,true)
+        if standard and not seen[mapId] and spot
+           and spot.x~=nil and spot.y~=nil then
+          seen[mapId]=true
+          rows[#rows+1]={
+            label=prettyId(mapId), mapId=mapId,
+            x=spot.x, y=spot.y, facing="down"
+          }
+        end
+      end
+    end
+    return rows
+  end
+
+  local function teleportTo(game,row)
+    if not (row and mod.world and type(mod.world.warpTo)=="function") then
+      return false,"warp API unavailable"
+    end
+    return mod.world:warpTo(row.mapId,row.x,row.y,row.facing or "down",
+      { arrive="teleport" })
+  end
+
+  ---------------------------------------------------------------------------
+  -- DV / EV (Stat EXP) editor
+  --
+  -- Gen 1 and Gen 2 both store four independent 0..15 DVs. HP DV is derived
+  -- from their low bits. They also both store five 16-bit Stat EXP words.
+  -- Gen 2's single Special DV / Stat EXP word feeds both SpA and SpD.
+  ---------------------------------------------------------------------------
+
+  local DV_KEYS = {
+    {key="attack", label="ATK DV"},
+    {key="defense",label="DEF DV"},
+    {key="speed",  label="SPD DV"},
+    {key="special",label="SPC DV"},
+  }
+  local EV_KEYS = {
+    {key="hp",     label="HP EV"},
+    {key="attack", label="ATK EV"},
+    {key="defense",label="DEF EV"},
+    {key="speed",  label="SPD EV"},
+    {key="special",label="SPC EV"},
+  }
+
+  local function hpDv(dvs)
+    local function bit(v) return (v or 0)%2 end
+    return bit(dvs.attack)*8+bit(dvs.defense)*4+bit(dvs.speed)*2+bit(dvs.special)
+  end
+
+  local function getPartyMon(game)
+    local party=game and game.save and game.save.party
+    return party and party[editor.partySlot] or nil
+  end
+
+  local function editorSpeciesDef(mon)
+    return mon and mod.content.pokemon:get(mon.species) or nil
+  end
+
+  local function calcGen1One(base,dv,statExp,level,isHp)
+    local root=math.min(255,math.ceil(math.sqrt(statExp or 0)))
+    local ev=math.floor(root/4)
+    local v=math.floor((((base or 1)+(dv or 0))*2+ev)*(level or 1)/100)
+    return v+(isHp and ((level or 1)+10) or 5)
+  end
+
+  local function calcGen2One(base,dv,statExp,level,isHp)
+    local ev=math.floor(math.sqrt(statExp or 0)/4)
+    local v=math.floor((((base or 1)*2+(dv or 0)*2+ev)*(level or 1))/100)
+    return v+(isHp and ((level or 1)+10) or 5)
+  end
+
+  local SHINY_ATK_DV = {
+    [2]=true,[3]=true,[6]=true,[7]=true,
+    [10]=true,[11]=true,[14]=true,[15]=true,
+  }
+
+  local function refreshEditedMon(game,mon)
+    local def=editorSpeciesDef(mon)
+    if not (mon and def and def.baseStats) then return false end
+
+    mon.dvs=mon.dvs or {}
+    mon.statExp=mon.statExp or {}
+    mon.dvs.hp=hpDv(mon.dvs)
+
+    local oldMax=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp or 1
+    local oldHp=mon.hp or oldMax
+    local wasFull=oldHp>=oldMax
+    local level=mon.level or 1
+    local b=def.baseStats
+    local se=mon.statExp
+    local d=mon.dvs
+
+    if isGold(game) then
+      local stats={
+        hp=calcGen2One(b.hp,d.hp,se.hp,level,true),
+        attack=calcGen2One(b.attack,d.attack,se.attack,level,false),
+        defense=calcGen2One(b.defense,d.defense,se.defense,level,false),
+        speed=calcGen2One(b.speed,d.speed,se.speed,level,false),
+        specialAttack=calcGen2One(b.specialAttack,d.special,se.special,level,false),
+        specialDefense=calcGen2One(b.specialDefense,d.special,se.special,level,false),
+      }
+      mon.stats=stats
+      mon.maxHp=stats.hp
+      mon.hp=wasFull and stats.hp or math.max(0,math.min(oldHp,stats.hp))
+
+      -- DVs are authoritative for these Gen-2 properties.
+      mon.shiny=(d.defense==10 and d.speed==10 and d.special==10
+        and SHINY_ATK_DV[d.attack]==true)
+      local ratio=def.genderRatio
+      if ratio==nil or ratio==0xff then
+        mon.gender="unknown"
+      else
+        mon.gender=((d.attack or 0)<math.floor(ratio/16)) and "female" or "male"
+      end
+    else
+      local stats={
+        hp=calcGen1One(b.hp,d.hp,se.hp,level,true),
+        attack=calcGen1One(b.attack,d.attack,se.attack,level,false),
+        defense=calcGen1One(b.defense,d.defense,se.defense,level,false),
+        speed=calcGen1One(b.speed,d.speed,se.speed,level,false),
+        special=calcGen1One(b.special,d.special,se.special,level,false),
+      }
+      mon.stats=stats
+      mon.hp=wasFull and stats.hp or math.max(0,math.min(oldHp,stats.hp))
+    end
+    return true
+  end
+
+  local function hexFromValue(value)
+    value=math.max(0,math.min(65535,math.floor(tonumber(value) or 0)))
+    return {
+      math.floor(value/4096)%16,
+      math.floor(value/256)%16,
+      math.floor(value/16)%16,
+      value%16,
+    }
+  end
+
+  local function valueFromHex(d)
+    return (d[1] or 0)*4096+(d[2] or 0)*256+(d[3] or 0)*16+(d[4] or 0)
+  end
+
+  local HEX="0123456789ABCDEF"
+  local function hexDigit(v) return HEX:sub((v or 0)+1,(v or 0)+1) end
+
+  local function openEvEditor(game,key)
+    local mon=getPartyMon(game)
+    if not mon then return false end
+    mon.statExp=mon.statExp or {}
+    editor.evKey=key
+    editor.hexDigits=hexFromValue(mon.statExp[key] or 0)
+    mod.ui.push(game,EV_HEX_SCREEN)
+    return true
   end
 
   local function speciesRows()
@@ -1097,6 +1315,246 @@ return function(mod)
     return menu
   end})
 
+
+  mod.content.screens:register(TELEPORT_SCREEN,{new=function(game)
+    local rows=teleportRows(game)
+    local items={}
+    for _,row in ipairs(rows) do
+      items[#items+1]={label=row.label,value=row}
+    end
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"TELEPORT",items,{
+      pageJump=true,
+      keyRepeat=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.teleportIndex=current.index or uiPos.teleportIndex
+        uiPos.teleportScroll=current.scroll or uiPos.teleportScroll
+        current:close()
+        local ok=teleportTo(game,item.value)
+        if not ok then mod.ui.push(game,MAIN_SCREEN) end
+      end,
+      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(uiPos.teleportIndex,math.max(1,#items)))
+    menu.scroll=math.max(0,math.min(uiPos.teleportScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(PARTY_EDIT_SCREEN,{new=function(game)
+    local party=game and game.save and game.save.party or {}
+    local items={}
+    for i,mon in ipairs(party) do
+      local def=editorSpeciesDef(mon)
+      local name=(mon.nickname and mon.nickname~="" and mon.nickname)
+        or (def and def.name) or mon.species or ("SLOT "..i)
+      items[#items+1]={
+        label=tostring(i)..". "..name,
+        right="L"..tostring(mon.level or 1),
+        slot=i,
+      }
+    end
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"DV / EV EDIT",items,{
+      pageJump=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.partyEditIndex=current.index or uiPos.partyEditIndex
+        uiPos.partyEditScroll=current.scroll or uiPos.partyEditScroll
+        editor.partySlot=item.slot
+        current:close()
+        mod.ui.push(game,MON_EDIT_SCREEN)
+      end,
+      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(uiPos.partyEditIndex,math.max(1,#items)))
+    menu.scroll=math.max(0,math.min(uiPos.partyEditScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(DV_PICK_SCREEN,{new=function(game)
+    local mon=getPartyMon(game)
+    local key=editor.dvKey
+    local cur=mon and mon.dvs and mon.dvs[key] or 0
+    local items={}
+    for v=0,15 do
+      items[#items+1]={
+        label="DV "..tostring(v),
+        right=(v==cur) and "*" or "",
+        value=v,
+      }
+    end
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,string.upper(key or "DV"),items,{
+      pageJump=true,
+      keyRepeat=true,
+      onChoose=function(item,current)
+        if not (item and mon and key) then return end
+        uiPos.dvPickIndex=current.index or uiPos.dvPickIndex
+        uiPos.dvPickScroll=current.scroll or uiPos.dvPickScroll
+        mon.dvs=mon.dvs or {}
+        mon.dvs[key]=item.value
+        mon.dvs.hp=hpDv(mon.dvs)
+        refreshEditedMon(game,mon)
+        current:close()
+        mod.ui.push(game,MON_EDIT_SCREEN)
+      end,
+      onCancel=function() mod.ui.push(game,MON_EDIT_SCREEN) end
+    })
+    menu.index=math.max(1,math.min((cur or 0)+1,#items))
+    menu.scroll=math.max(0,math.min(menu.index-1,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(EV_HEX_SCREEN,{new=function(game)
+    local key=editor.evKey
+    local value=valueFromHex(editor.hexDigits)
+    local items={}
+    for i=1,4 do
+      items[#items+1]={
+        label="HEX "..tostring(i),
+        right=hexDigit(editor.hexDigits[i]),
+        kind="digit", digit=i,
+      }
+    end
+    items[#items+1]={label="APPLY",right=tostring(value),kind="apply"}
+    items[#items+1]={label="CANCEL",kind="cancel"}
+
+    local function reopen(current)
+      uiPos.evHexIndex=current.index or uiPos.evHexIndex
+      uiPos.evHexScroll=current.scroll or uiPos.evHexScroll
+      current:close()
+      mod.ui.push(game,EV_HEX_SCREEN)
+    end
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,string.upper(key or "EV").." EV",items,{
+      onChoose=function(item,current)
+        if not item then return end
+        if item.kind=="digit" then
+          local i=item.digit
+          editor.hexDigits[i]=((editor.hexDigits[i] or 0)+1)%16
+          reopen(current)
+          return
+        end
+        if item.kind=="apply" then
+          local mon=getPartyMon(game)
+          if mon and key then
+            mon.statExp=mon.statExp or {}
+            mon.statExp[key]=valueFromHex(editor.hexDigits)
+            refreshEditedMon(game,mon)
+          end
+          current:close()
+          mod.ui.push(game,MON_EDIT_SCREEN)
+          return
+        end
+        current:close()
+        mod.ui.push(game,MON_EDIT_SCREEN)
+      end,
+      onSelectKey=function(item,current)
+        if item and item.kind=="digit" then
+          local i=item.digit
+          editor.hexDigits[i]=((editor.hexDigits[i] or 0)+15)%16
+          reopen(current)
+        end
+      end,
+      onCancel=function() mod.ui.push(game,MON_EDIT_SCREEN) end,
+      footer="A:+  SELECT:-"
+    })
+    menu.index=math.max(1,math.min(uiPos.evHexIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.evHexScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(MON_EDIT_SCREEN,{new=function(game)
+    local mon=getPartyMon(game)
+    if not mon then
+      return mod.ui.ListMenu.new(game,"DV / EV EDIT",{},{
+        onCancel=function() mod.ui.push(game,PARTY_EDIT_SCREEN) end
+      })
+    end
+
+    mon.dvs=mon.dvs or {}
+    mon.statExp=mon.statExp or {}
+    mon.dvs.hp=hpDv(mon.dvs)
+
+    local def=editorSpeciesDef(mon)
+    local name=(mon.nickname and mon.nickname~="" and mon.nickname)
+      or (def and def.name) or mon.species or "POKEMON"
+
+    local items={}
+    for _,row in ipairs(DV_KEYS) do
+      items[#items+1]={
+        label=row.label,
+        right=tostring(mon.dvs[row.key] or 0),
+        kind="dv", key=row.key
+      }
+    end
+    items[#items+1]={
+      label="HP DV",right=tostring(mon.dvs.hp or 0),kind="readonly"
+    }
+    for _,row in ipairs(EV_KEYS) do
+      items[#items+1]={
+        label=row.label,
+        right=tostring(mon.statExp[row.key] or 0),
+        kind="ev", key=row.key
+      }
+    end
+    items[#items+1]={label="MAX ALL DVS",kind="max_dv"}
+    items[#items+1]={label="MAX ALL EVS",kind="max_ev"}
+    items[#items+1]={label="ZERO ALL EVS",kind="zero_ev"}
+    items[#items+1]={label="BACK",kind="back"}
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,name,items,{
+      pageJump=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.monEditIndex=current.index or uiPos.monEditIndex
+        uiPos.monEditScroll=current.scroll or uiPos.monEditScroll
+
+        if item.kind=="dv" then
+          editor.dvKey=item.key
+          current:close()
+          mod.ui.push(game,DV_PICK_SCREEN)
+          return
+        end
+        if item.kind=="ev" then
+          current:close()
+          openEvEditor(game,item.key)
+          return
+        end
+        if item.kind=="max_dv" then
+          mon.dvs.attack=15; mon.dvs.defense=15
+          mon.dvs.speed=15; mon.dvs.special=15
+          mon.dvs.hp=hpDv(mon.dvs)
+          refreshEditedMon(game,mon)
+          current:close(); mod.ui.push(game,MON_EDIT_SCREEN); return
+        end
+        if item.kind=="max_ev" then
+          for _,r in ipairs(EV_KEYS) do mon.statExp[r.key]=65535 end
+          refreshEditedMon(game,mon)
+          current:close(); mod.ui.push(game,MON_EDIT_SCREEN); return
+        end
+        if item.kind=="zero_ev" then
+          for _,r in ipairs(EV_KEYS) do mon.statExp[r.key]=0 end
+          refreshEditedMon(game,mon)
+          current:close(); mod.ui.push(game,MON_EDIT_SCREEN); return
+        end
+        if item.kind=="back" then
+          current:close(); mod.ui.push(game,PARTY_EDIT_SCREEN); return
+        end
+      end,
+      onCancel=function() mod.ui.push(game,PARTY_EDIT_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(uiPos.monEditIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.monEditScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
   mod.content.screens:register(MAIN_SCREEN,{new=function(game)
     local gold=isGold(game); local items={}
     for _,c in ipairs(CHEATS) do
@@ -1117,6 +1575,8 @@ return function(mod)
       right=enabled("wild_pick") and "ON >" or "OFF >",
       kind="wild_menu"
     }
+    items[#items+1]={label="TELEPORT",right=">",kind="teleport"}
+    items[#items+1]={label="DV / EV EDITOR",right=">",kind="party_edit"}
     items[#items+1]={label="USE SURFBOARD",kind="surfboard"}
     local menu
     menu=mod.ui.ListMenu.new(game,gold and "GAMESHARK G2" or "GAMESHARK G1",items,{
@@ -1128,6 +1588,16 @@ return function(mod)
       if item.kind=="wild_menu" then
         current:close()
         mod.ui.push(game,WILD_SCREEN)
+        return
+      end
+      if item.kind=="teleport" then
+        current:close()
+        mod.ui.push(game,TELEPORT_SCREEN)
+        return
+      end
+      if item.kind=="party_edit" then
+        current:close()
+        mod.ui.push(game,PARTY_EDIT_SCREEN)
         return
       end
       if item.kind=="surfboard" then
@@ -1142,6 +1612,10 @@ return function(mod)
     menu.scroll=math.max(0,math.min(uiPos.mainScroll,math.max(0,#items-menu.rows)))
     return menu
   end})
+
+  mod.exports.teleportRows=function(game) return teleportRows(game or mod.game) end
+  mod.exports.teleportTo=function(row,game) return teleportTo(game or mod.game,row) end
+  mod.exports.refreshEditedMon=function(mon,game) return refreshEditedMon(game or mod.game,mon) end
 
   mod.hooks:wrap("ui.start_menu.items",function(next,game,items)
     local out=next(game,items); if type(out)~="table" then return out end

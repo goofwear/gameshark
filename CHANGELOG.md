@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.7.0] - 2026-08-20
+
+### Added
+- Added **TELEPORT** for Red, Blue, Yellow, Gold and Silver.
+- Teleport uses Gen1Recomp's public world warp API and ROM-extracted
+  destination coordinates/spawns; no Fly requirement or visited-town flag edit.
+- Added standalone **DV / EV EDITOR** for party Pokemon in Gen 1 and Gen 2.
+- Added per-stat DV editing (0-15) with derived HP DV display.
+- Added arbitrary 16-bit Stat EXP editing (0-65,535) through a hexadecimal
+  digit editor.
+- Added MAX ALL DVS, MAX ALL EVS and ZERO ALL EVS actions.
+- Recalculates Pokemon stats immediately after edits.
+- Gen 2 DV changes refresh the Pokemon's DV-derived gender and shiny state.
+
+### Compatibility
+- Supports Gen 1: Red, Blue, Yellow.
+- Supports Gen 2: Gold and Silver.
+- No dependency on FAFF0x's mod or any other DV/EV editor.
+
+
 ## [0.6.1] - 2026-08-19
 
 ### Fixed
