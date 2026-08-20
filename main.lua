@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.2
+-- GameShark Compatibility 0.7.3
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -898,12 +898,14 @@ return function(mod)
         local row=pendingTeleport
         pendingTeleport=nil
 
-        -- The GameShark menu is normally opened through START -> MODS ->
-        -- GAMESHARK. Closing only the Teleport ListMenu exposes those older
-        -- overlays after a successful warp, especially on Gen 2. Teleport is
-        -- only available from idle overworld play, so unwind the complete UI
-        -- overlay stack before changing maps.
-        if game and game.stack and type(game.stack.clear)=="function" then
+        -- Gen 2 keeps START / MODS / GameShark as nested opaque screens, so
+        -- Gold/Silver need the whole overlay stack removed before a warp.
+        -- Gen 1's stack also owns the live overworld state; clearing it there
+        -- destroys the scene and produces a blank screen.  Red/Blue/Yellow
+        -- therefore keep the older working behavior: only Teleport itself was
+        -- closed when the destination was chosen.
+        if isGold(game) and game and game.stack
+           and type(game.stack.clear)=="function" then
           game.stack:clear()
         end
 
@@ -1561,6 +1563,24 @@ return function(mod)
         kind="ev", key=row.key
       }
     end
+
+    -- Show the *effective* stats produced by the current DV/Stat EXP values.
+    -- This is especially useful in Gen 1 where 65535 Stat EXP is run through
+    -- the original sqrt/4 formula and does not mean +65535 visible stat.
+    if mon.stats then
+      items[#items+1]={label="-- RESULT STATS --",kind="readonly"}
+      items[#items+1]={label="HP",right=tostring(mon.stats.hp or mon.maxHp or mon.hp or 0),kind="readonly"}
+      items[#items+1]={label="ATK",right=tostring(mon.stats.attack or 0),kind="readonly"}
+      items[#items+1]={label="DEF",right=tostring(mon.stats.defense or 0),kind="readonly"}
+      items[#items+1]={label="SPD",right=tostring(mon.stats.speed or 0),kind="readonly"}
+      if isGold(game) then
+        items[#items+1]={label="SP ATK",right=tostring(mon.stats.specialAttack or 0),kind="readonly"}
+        items[#items+1]={label="SP DEF",right=tostring(mon.stats.specialDefense or 0),kind="readonly"}
+      else
+        items[#items+1]={label="SPC",right=tostring(mon.stats.special or 0),kind="readonly"}
+      end
+    end
+
     items[#items+1]={label="MAX ALL DVS",kind="max_dv"}
     items[#items+1]={label="MAX ALL EVS",kind="max_ev"}
     items[#items+1]={label="ZERO ALL EVS",kind="zero_ev"}

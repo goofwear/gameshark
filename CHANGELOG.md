@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.3] - 2026-08-20
+
+### Fixed
+- Fixed the v0.7.2 **Teleport** regression on Red/Blue/Yellow that could leave
+  a blank/white screen after selecting a destination.
+- Full state-stack clearing is now Gen-2-only; Gen 1 preserves its overworld
+  state while retaining the previously working teleport path.
+
+### UI / Verification
+- Added a **RESULT STATS** section to the DV/EV editor showing the effective
+  calculated HP/ATK/DEF/SPD/Special values immediately.
+- Makes authentic Gen-1 Stat EXP behavior easier to verify at low levels.
+
+
 ## [0.7.2] - 2026-08-20
 
 ### Fixed
