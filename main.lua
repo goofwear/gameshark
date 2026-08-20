@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.1
+-- GameShark Compatibility 0.7.2
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -897,6 +897,16 @@ return function(mod)
       else
         local row=pendingTeleport
         pendingTeleport=nil
+
+        -- The GameShark menu is normally opened through START -> MODS ->
+        -- GAMESHARK. Closing only the Teleport ListMenu exposes those older
+        -- overlays after a successful warp, especially on Gen 2. Teleport is
+        -- only available from idle overworld play, so unwind the complete UI
+        -- overlay stack before changing maps.
+        if game and game.stack and type(game.stack.clear)=="function" then
+          game.stack:clear()
+        end
+
         local ok=teleportTo(game,row)
         if not ok then
           mod.ui.push(game,MAIN_SCREEN)

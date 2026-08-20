@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.2] - 2026-08-20
+
+### Fixed
+- Teleport now completely closes nested START / MODS / GameShark UI overlays
+  before executing the warp.
+- Fixes Gold arriving at the selected destination with one or more menus still
+  visible.
+
+### Verified
+- Gen 1 DV/EV editor calculation is working as intended. Gen-1 EV values are
+  authentic 16-bit Stat EXP values and use the original square-root-based stat
+  formula.
+
+
 ## [0.7.1] - 2026-08-20
 
 ### Fixed
