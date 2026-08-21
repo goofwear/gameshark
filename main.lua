@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.4
+-- GameShark Compatibility 0.7.5
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -183,33 +183,47 @@ return function(mod)
   local function itemRows(game)
     local rows={}
     local items=game and game.data and game.data.items or {}
+
     for id,def in pairs(items) do
-      local name=def and def.name
-      local index=def and def.index
-      local pocket=(def and def.pocket) or "ITEM"
-      local upper=tostring(id):upper()
+      -- Gen 2's decoded tables may expose auxiliary/alias entries alongside
+      -- the canonical symbolic item records. Inventory keys throughout
+      -- Gen1Recomp are symbolic strings, so only those are valid Give Item
+      -- candidates. This also prevents mixed number/string keys from reaching
+      -- Lua's relational operators during sorting.
+      if type(id)=="string" and type(def)=="table" then
+        local name=def.name
+        local index=def.index
+        local pocket=def.pocket or "ITEM"
+        local upper=id:upper()
 
-      -- Exclude non-items / sentinel records and badges. Everything else is
-      -- sourced from the active game's own item table, so Red/Blue/Yellow and
-      -- Gold/Silver automatically get their correct item catalogs.
-      local giveable = type(name)=="string" and name~=""
-        and upper~="NO_ITEM"
-        and not upper:find("BADGE",1,true)
+        local giveable = type(name)=="string" and name~=""
+          and upper~="NO_ITEM"
+          and upper~="TERU_SAMA"
+          and not upper:find("BADGE",1,true)
 
-      if giveable then
-        rows[#rows+1]={
-          id=id,
-          name=name,
-          index=type(index)=="number" and index or 99999,
-          pocket=pocket,
-        }
+        if giveable then
+          rows[#rows+1]={
+            id=id,
+            name=name,
+            index=type(index)=="number" and index or 99999,
+            pocket=type(pocket)=="string" and pocket or "ITEM",
+          }
+        end
       end
     end
 
     table.sort(rows,function(a,b)
-      if a.index~=b.index then return a.index<b.index end
-      if a.name~=b.name then return a.name<b.name end
-      return a.id<b.id
+      local ai=tonumber(a.index) or 99999
+      local bi=tonumber(b.index) or 99999
+      if ai~=bi then return ai<bi end
+
+      local an=tostring(a.name or a.id or "")
+      local bn=tostring(b.name or b.id or "")
+      if an~=bn then return an<bn end
+
+      -- tostring is intentional: never allow heterogeneous IDs to raise
+      -- "attempt to compare number with string" on Gen 2.
+      return tostring(a.id)<tostring(b.id)
     end)
     return rows
   end
@@ -1526,10 +1540,15 @@ return function(mod)
         if not item then return end
         uiPos.itemPickIndex=current.index or uiPos.itemPickIndex
         uiPos.itemPickScroll=current.scroll or uiPos.itemPickScroll
-        local row=item.value
+          local row=item.value
+        if not (type(row)=="table" and type(row.id)=="string") then
+          current:close()
+          mod.ui.push(game,MAIN_SCREEN)
+          return
+        end
         giveItemState.itemId=row.id
-        giveItemState.itemName=row.name
-        giveItemState.pocket=row.pocket
+        giveItemState.itemName=tostring(row.name or row.id)
+        giveItemState.pocket=type(row.pocket)=="string" and row.pocket or "ITEM"
         current:close()
         mod.ui.push(game,ITEM_QTY_SCREEN)
       end,

@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.7.4
+# GameShark Compatibility v0.7.5
 
 **Author: goofwear**
 
@@ -48,7 +48,7 @@ This version does not use `io`, `os.getenv`, `os.execute`, `love.filesystem`, `d
 
 ## Installation
 
-Copy the `gen1recomp_gameshark_v0.7.4_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
+Copy the `gen1recomp_gameshark_v0.7.5_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
 
 Delete older GameShark Compatibility folders first so only one version is installed.
 
@@ -57,7 +57,7 @@ Delete older GameShark Compatibility folders first so only one version is instal
 Save-data cheats such as items and badges make real changes to the active save. Disabling the cheat does not remove items or badges already granted. Save before experimenting with trainer capture or wall walking.
 
 
-## v0.7.4 fixes
+## v0.7.5 fixes
 
 - Fixed **ONE HIT KO** on Pokemon Gold / Gen 2.
   Gold's `battle.damage` hook uses the active Pokemon tables directly, so the
@@ -73,7 +73,7 @@ Save-data cheats such as items and badges make real changes to the active save. 
 Repository: https://github.com/goofwear/gameshark
 
 
-## v0.7.4 — Gold Wild Pick customization
+## v0.7.5 — Gold Wild Pick customization
 
 When playing Pokemon Gold / Gen 2, **WILD PICK** now has two additional controls:
 
@@ -101,7 +101,7 @@ not have native Pokemon gender or shininess.
 Map bounds remain protected.
 
 
-## v0.7.4 fixes
+## v0.7.5 fixes
 
 - **ALL BADGES on Gold now creates exactly 16 badges**: eight Johto and eight
   Kanto. Numeric duplicate badge aliases left by v0.5.0-v0.5.2 are removed.
@@ -113,7 +113,7 @@ Map bounds remain protected.
   selection instead of jumping back to the top.
 
 
-## v0.7.4 — Gen1Recomp 0.1.93 compatibility
+## v0.7.5 — Gen1Recomp 0.1.93 compatibility
 
 ### Persistent Gold shinies
 Gold Wild Pick no longer relies only on the `shiny.roll` return value.
@@ -147,7 +147,7 @@ still require a GameShark update even though the manifest no longer imposes
 an artificial upper version ceiling.
 
 
-## v0.7.4
+## v0.7.5
 
 ### Fixed: Steal Trainer Pokemon on Red / Blue / Yellow
 
@@ -155,7 +155,7 @@ Gen 1's native capture path ends a caught Pokemon battle with the result
 `caught`. That is correct for a wild battle, but a trainer encounter only marks
 the trainer NPC defeated when the result is `win`.
 
-When **STEAL TRAINER** is enabled, v0.7.4 now:
+When **STEAL TRAINER** is enabled, v0.7.5 now:
 
 1. uses the normal capture animation and forced catch;
 2. keeps the captured Pokemon in the normal party/PC flow;
@@ -180,7 +180,7 @@ balance. Because the balance is refreshed continuously, purchased prizes and
 slot-machine bets are effectively unlimited while the cheat is ON.
 
 
-## v0.7.4
+## v0.7.5
 
 ### Added: Infinite PP
 
@@ -206,7 +206,7 @@ UI and PP-Up rules when the player applies one to a move.
 
 ## Mod ID migration
 
-Starting with the clean-ID v0.7.4 package, the manifest ID and installed folder
+Starting with the clean-ID v0.7.5 package, the manifest ID and installed folder
 are both:
 
 ```text
@@ -219,14 +219,14 @@ mods by manifest ID, users upgrading from an older build should remove the old
 Future updates should continue using the `GameShark` ID.
 
 
-## v0.7.4 — Red / Blue / Yellow trainer-capture fix
+## v0.7.5 — Red / Blue / Yellow trainer-capture fix
 
 The extremely long Poké Ball wobble was caused by older universal builds
 forcing the Gen 1 capture seam with `true, 255`. Current Gen1Recomp ultimately
 uses that second value as the shake count, so the ball could visibly wobble
 hundreds of times before the capture finished.
 
-v0.7.4 changes the Gen 1 path:
+v0.7.5 changes the Gen 1 path:
 
 - **STEAL TRAINER** temporarily wraps the active battle's `catchAttempt`.
 - The stolen trainer Pokémon is a deterministic successful catch.
@@ -242,7 +242,7 @@ BattleState capture implementation.
 Gold's working trainer-capture code is unchanged.
 
 
-## v0.7.4 — Infinite HP fix
+## v0.7.5 — Infinite HP fix
 
 The old **SLOT 1 HP** implementation mainly refilled `save.party[1].hp`.
 On newer Gen1Recomp builds that is not sufficient for true in-battle
@@ -264,7 +264,7 @@ This uses the shared Gen 1 battle path and therefore applies to Red, Blue and
 Yellow, as well as the existing Gold support.
 
 
-## v0.7.4 — Wild Pokémon setup redesign
+## v0.7.5 — Wild Pokémon setup redesign
 
 Wild Pick is now grouped into a dedicated **WILD POKEMON** submenu instead of
 scattering species, gender, shiny, and the enable switch across the main
@@ -312,7 +312,7 @@ list while preserving the same underlying `wild_pick` effect id for existing
 saved settings and external integrations.
 
 
-## v0.7.4 — Instant Battle + Wild menu spacing
+## v0.7.5 — Instant Battle + Wild menu spacing
 
 ### Instant Battle
 
@@ -365,13 +365,13 @@ shortened to `N/A` in the value column. These changes keep the Game Boy-width
 menu columns separated instead of allowing text to overlap.
 
 
-## v0.7.4 — Gold Instant Battle fix
+## v0.7.5 — Gold Instant Battle fix
 
 v0.6.0 incorrectly called the Gen-1-only `mod.world:startWildBattle()` helper
 for every game. That made Instant Battle work in Red/Blue/Yellow but silently
 return to the menu in Gold.
 
-v0.7.4 selects the proper supported Gen1Recomp API at runtime:
+v0.7.5 selects the proper supported Gen1Recomp API at runtime:
 
 - **Red / Blue / Yellow:** `mod.world:startWildBattle(species, level)`
 - **Gold:** `mod.world:queueScript({{"start_battle", "wild", species, level}})`
@@ -386,7 +386,7 @@ The selected Gold Gender and Shiny options are prepared before the Gen-2 Mon is
 constructed, so they remain applicable to Instant Battles.
 
 
-## v0.7.4 — Teleport + DV / EV Editor
+## v0.7.5 — Teleport + DV / EV Editor
 
 ### Teleport
 
@@ -456,7 +456,7 @@ Pokemon structures and stat formulas. It does not include, copy, or require
 FAFF0x's DV/EV editor code.
 
 
-## v0.7.4 — Teleport UI + DV/EV stat refresh fixes
+## v0.7.5 — Teleport UI + DV/EV stat refresh fixes
 
 ### Gold Teleport menu
 Gold could complete the warp while the GameShark ListMenu was still on the UI
@@ -482,7 +482,7 @@ already changed with v0.7.0 can be repaired without re-entering every number.
 A **RECALC STATS** action is also available explicitly.
 
 
-## v0.7.4 — Teleport menu-stack fix
+## v0.7.5 — Teleport menu-stack fix
 
 Teleport now clears the complete menu overlay stack immediately before the
 warp. This matters when GameShark was opened through nested START / MODS
@@ -496,7 +496,7 @@ to the visible stat. For example, a level-20 Mew with 15 DVs and 65,535 Stat
 EXP has 88 HP and 63 in Attack, Defense, Speed and Special.
 
 
-## v0.7.4 — Gen 1 Teleport regression fix + stat preview
+## v0.7.5 — Gen 1 Teleport regression fix + stat preview
 
 ### Teleport
 
@@ -504,7 +504,7 @@ v0.7.2 fixed Gold's leftover menus by clearing the complete state stack before
 warping. That is correct for Gen 2, but incorrect for Gen 1 because the Gen-1
 stack also contains the active overworld state.
 
-v0.7.4 now uses generation-specific behavior:
+v0.7.5 now uses generation-specific behavior:
 
 - **Red / Blue / Yellow:** close the Teleport menu and warp, preserving the
   live overworld state.
@@ -532,7 +532,7 @@ video, confirming the Gen-1 stat calculation was being applied. The new
 RESULT STATS section makes that visible before leaving GameShark.
 
 
-## v0.7.4 — Give Item + Gen 1 Wild-menu spacing
+## v0.7.5 — Give Item + Gen 1 Wild-menu spacing
 
 ### Give Item
 
@@ -582,3 +582,21 @@ WILD POKEMON
 ```
 
 No Wild Pokemon functionality changed.
+
+
+## v0.7.5 — Gold Give Item crash fix
+
+Gold could crash immediately after selecting **GIVE ITEM**, before the item
+list appeared. The picker was iterating every entry exposed by the Gen-2 item
+data and its final sort compared raw table keys. A heterogeneous auxiliary key
+could therefore reach a Lua `<` comparison against a symbolic string item ID.
+
+v0.7.5 hardens the picker:
+
+- Only canonical symbolic string IDs with table item definitions are listed.
+- Item names must be real strings.
+- Sentinel / badge entries are excluded.
+- All fallback ID comparisons use `tostring()`.
+- The selection callback validates the row before opening the quantity screen.
+
+Blue's already-working Give Item path is otherwise unchanged.

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.5] - 2026-08-21
+
+### Fixed
+- Fixed Pokemon Gold crashing immediately when selecting **GIVE ITEM**.
+- Give Item now filters Gen-2 item data to canonical symbolic item records.
+- Removed unsafe raw mixed-type item-ID comparison from the item-list sorter.
+- Added defensive validation before opening the quantity picker.
+
+
 ## [0.7.4] - 2026-08-21
 
 ### Added
