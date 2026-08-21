@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.3
+-- GameShark Compatibility 0.7.4
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -12,6 +12,8 @@ local PARTY_EDIT_SCREEN = "GameSharkPartyEdit"
 local MON_EDIT_SCREEN = "GameSharkMonEdit"
 local DV_PICK_SCREEN = "GameSharkDvPick"
 local EV_HEX_SCREEN = "GameSharkEvHex"
+local ITEM_PICK_SCREEN = "GameSharkItemPick"
+local ITEM_QTY_SCREEN = "GameSharkItemQty"
 
 local GENDER_CHOICES = { "random", "male", "female" }
 local SHINY_CHOICES = { "random", "yes", "no" }
@@ -73,6 +75,14 @@ return function(mod)
     monEditIndex = 1, monEditScroll = 0,
     dvPickIndex = 1, dvPickScroll = 0,
     evHexIndex = 1, evHexScroll = 0,
+    itemPickIndex = 1, itemPickScroll = 0,
+    itemQtyIndex = 1, itemQtyScroll = 0,
+  }
+
+  local giveItemState = {
+    itemId = nil,
+    itemName = nil,
+    pocket = nil,
   }
 
   -- Session-local editor state. The actual DV/Stat EXP values live on the
@@ -132,11 +142,76 @@ return function(mod)
   local function ensureItem(save,id,qty)
     save.inventory=save.inventory or {}
     if (save.inventory[id] or 0)<qty then save.inventory[id]=qty end
-    if save.version~="gold" and save.generation~=2 then
-      save.bagOrder=save.bagOrder or {}
-      local found=false; for _,v in ipairs(save.bagOrder) do if v==id then found=true break end end
-      if not found then table.insert(save.bagOrder,id) end
+
+    -- Both generations use bagOrder in current Gen1Recomp. Gen 2 then buckets
+    -- the same flat inventory into ITEM / BALL / KEY_ITEM / TM_HM pockets.
+    save.bagOrder=save.bagOrder or {}
+    local found=false
+    for _,v in ipairs(save.bagOrder) do
+      if v==id then found=true break end
     end
+    if not found then table.insert(save.bagOrder,id) end
+  end
+
+  local function addItemToBag(game,id,qty)
+    local save=game and game.save
+    if not (save and id) then return false,"save unavailable" end
+    save.inventory=save.inventory or {}
+    save.bagOrder=save.bagOrder or {}
+
+    local def=game and game.data and game.data.items and game.data.items[id]
+    local pocket=(def and def.pocket) or "ITEM"
+
+    -- Gen 2 key items and HMs are unique inventory entries. Keep those at one
+    -- copy even if a larger quantity somehow reaches this helper.
+    local unique = pocket=="KEY_ITEM"
+      or (pocket=="TM_HM" and tostring(id):sub(1,3)=="HM_")
+
+    local add=math.max(1,math.min(99,math.floor(tonumber(qty) or 1)))
+    local cur=tonumber(save.inventory[id]) or 0
+    local target=unique and 1 or math.min(99,cur+add)
+    save.inventory[id]=target
+
+    local found=false
+    for _,v in ipairs(save.bagOrder) do
+      if v==id then found=true break end
+    end
+    if not found then table.insert(save.bagOrder,id) end
+    return true,target
+  end
+
+  local function itemRows(game)
+    local rows={}
+    local items=game and game.data and game.data.items or {}
+    for id,def in pairs(items) do
+      local name=def and def.name
+      local index=def and def.index
+      local pocket=(def and def.pocket) or "ITEM"
+      local upper=tostring(id):upper()
+
+      -- Exclude non-items / sentinel records and badges. Everything else is
+      -- sourced from the active game's own item table, so Red/Blue/Yellow and
+      -- Gold/Silver automatically get their correct item catalogs.
+      local giveable = type(name)=="string" and name~=""
+        and upper~="NO_ITEM"
+        and not upper:find("BADGE",1,true)
+
+      if giveable then
+        rows[#rows+1]={
+          id=id,
+          name=name,
+          index=type(index)=="number" and index or 99999,
+          pocket=pocket,
+        }
+      end
+    end
+
+    table.sort(rows,function(a,b)
+      if a.index~=b.index then return a.index<b.index end
+      if a.name~=b.name then return a.name<b.name end
+      return a.id<b.id
+    end)
+    return rows
   end
 
   -- Restore one player move to its real maximum PP.
@@ -1373,6 +1448,98 @@ return function(mod)
   end})
 
 
+  mod.content.screens:register(ITEM_QTY_SCREEN,{new=function(game)
+    local id=giveItemState.itemId
+    local name=giveItemState.itemName or id or "ITEM"
+    local pocket=giveItemState.pocket or "ITEM"
+    local unique = pocket=="KEY_ITEM"
+      or (pocket=="TM_HM" and tostring(id):sub(1,3)=="HM_")
+
+    if unique then
+      local items={
+        {label="ADD 1",value=1},
+        {label="BACK",kind="back"},
+      }
+      return mod.ui.ListMenu.new(game,name,items,{
+        onChoose=function(item,current)
+          if not item then return end
+          if item.kind=="back" then
+            current:close()
+            mod.ui.push(game,ITEM_PICK_SCREEN)
+            return
+          end
+          addItemToBag(game,id,1)
+          current:close()
+          mod.ui.push(game,MAIN_SCREEN)
+        end,
+        onCancel=function() mod.ui.push(game,ITEM_PICK_SCREEN) end
+      })
+    end
+
+    local items={}
+    for qty=1,99 do
+      items[#items+1]={label="ADD "..tostring(qty),value=qty}
+    end
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,name,items,{
+      pageJump=true,
+      keyRepeat=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.itemQtyIndex=current.index or uiPos.itemQtyIndex
+        uiPos.itemQtyScroll=current.scroll or uiPos.itemQtyScroll
+        addItemToBag(game,id,item.value)
+        current:close()
+        mod.ui.push(game,MAIN_SCREEN)
+      end,
+      onCancel=function() mod.ui.push(game,ITEM_PICK_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(uiPos.itemQtyIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.itemQtyScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(ITEM_PICK_SCREEN,{new=function(game)
+    local rows=itemRows(game)
+    local items={}
+    for _,row in ipairs(rows) do
+      local right=""
+      if isGold(game) then
+        if row.pocket=="BALL" then right="BALL"
+        elseif row.pocket=="KEY_ITEM" then right="KEY"
+        elseif row.pocket=="TM_HM" then right="TM"
+        end
+      end
+      items[#items+1]={
+        label=row.name,
+        right=right,
+        value=row,
+      }
+    end
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"GIVE ITEM",items,{
+      pageJump=true,
+      keyRepeat=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.itemPickIndex=current.index or uiPos.itemPickIndex
+        uiPos.itemPickScroll=current.scroll or uiPos.itemPickScroll
+        local row=item.value
+        giveItemState.itemId=row.id
+        giveItemState.itemName=row.name
+        giveItemState.pocket=row.pocket
+        current:close()
+        mod.ui.push(game,ITEM_QTY_SCREEN)
+      end,
+      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(uiPos.itemPickIndex,math.max(1,#items)))
+    menu.scroll=math.max(0,math.min(uiPos.itemPickScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
   mod.content.screens:register(TELEPORT_SCREEN,{new=function(game)
     local rows=teleportRows(game)
     local items={}
@@ -1654,10 +1821,13 @@ return function(mod)
       end
     end
     items[#items+1]={
-      label="WILD POKEMON",
+      -- Full wording does not fit beside OFF > on the original 160px Gen-1
+      -- ListMenu. Keep the full WILD POKEMON title inside its submenu.
+      label="WILD PKMN",
       right=enabled("wild_pick") and "ON >" or "OFF >",
       kind="wild_menu"
     }
+    items[#items+1]={label="GIVE ITEM",right=">",kind="give_item"}
     items[#items+1]={label="TELEPORT",right=">",kind="teleport"}
     items[#items+1]={label="DV / EV EDITOR",right=">",kind="party_edit"}
     items[#items+1]={label="USE SURFBOARD",kind="surfboard"}
@@ -1671,6 +1841,11 @@ return function(mod)
       if item.kind=="wild_menu" then
         current:close()
         mod.ui.push(game,WILD_SCREEN)
+        return
+      end
+      if item.kind=="give_item" then
+        current:close()
+        mod.ui.push(game,ITEM_PICK_SCREEN)
         return
       end
       if item.kind=="teleport" then
@@ -1696,6 +1871,8 @@ return function(mod)
     return menu
   end})
 
+  mod.exports.itemRows=function(game) return itemRows(game or mod.game) end
+  mod.exports.giveItem=function(id,qty,game) return addItemToBag(game or mod.game,id,qty) end
   mod.exports.teleportRows=function(game) return teleportRows(game or mod.game) end
   mod.exports.teleportTo=function(row,game) return teleportTo(game or mod.game,row) end
   mod.exports.refreshEditedMon=function(mon,game) return refreshEditedMon(game or mod.game,mon) end

@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.4] - 2026-08-21
+
+### Added
+- Added **GIVE ITEM** for Red, Blue, Yellow, Gold and Silver.
+- Item picker is generated from the running game's native `game.data.items`.
+- Added quantity selection from 1-99 for stackable items.
+- Existing stacks are increased up to the native quantity cap of 99.
+- Gen-2 Key Items and HMs are treated as unique items.
+- Maintains `bagOrder` so newly given items appear immediately in the bag.
+- Gen-2 pocket placement follows the item's native pocket definition.
+
+### UI
+- Shortened the cramped Gen-1 main-menu row from `WILD POKEMON` to
+  `WILD PKMN`, leaving visible spacing before `ON/OFF >`.
+- The Wild Pokemon submenu still uses the full `WILD POKEMON` title.
+
+
 ## [0.7.3] - 2026-08-20
 
 ### Fixed
