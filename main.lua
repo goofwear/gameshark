@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.5
+-- GameShark Compatibility 0.7.6
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -14,6 +14,9 @@ local DV_PICK_SCREEN = "GameSharkDvPick"
 local EV_HEX_SCREEN = "GameSharkEvHex"
 local ITEM_PICK_SCREEN = "GameSharkItemPick"
 local ITEM_QTY_SCREEN = "GameSharkItemQty"
+local MOVE_PARTY_SCREEN = "GameSharkMoveParty"
+local MOVE_PICK_SCREEN = "GameSharkMovePick"
+local MOVE_SLOT_SCREEN = "GameSharkMoveSlot"
 
 local GENDER_CHOICES = { "random", "male", "female" }
 local SHINY_CHOICES = { "random", "yes", "no" }
@@ -77,6 +80,15 @@ return function(mod)
     evHexIndex = 1, evHexScroll = 0,
     itemPickIndex = 1, itemPickScroll = 0,
     itemQtyIndex = 1, itemQtyScroll = 0,
+    movePartyIndex = 1, movePartyScroll = 0,
+    movePickIndex = 1, movePickScroll = 0,
+    moveSlotIndex = 1, moveSlotScroll = 0,
+  }
+
+  local moveEditor = {
+    partySlot = 1,
+    moveId = nil,
+    moveName = nil,
   }
 
   local giveItemState = {
@@ -232,6 +244,107 @@ return function(mod)
   --
   -- Gen 1 derives maximum PP from the move's base PP plus PP Ups.
   -- Gen 2 stores the computed maximum directly in move.maxPp.
+
+  ---------------------------------------------------------------------------
+  -- Unrestricted move editor
+  ---------------------------------------------------------------------------
+
+  local function moveRows(game,mon)
+    local rows={}
+    local moves=game and game.data and game.data.moves or {}
+    local known={}
+    for _,mv in ipairs((mon and mon.moves) or {}) do
+      if type(mv)=="table" and type(mv.id)=="string" then known[mv.id]=true end
+    end
+
+    for id,def in pairs(moves) do
+      if type(id)=="string" and type(def)=="table"
+         and type(def.name)=="string" and def.name~="" then
+        local upper=id:upper()
+        if upper~="NO_MOVE" and upper~="NONE" and not upper:find("UNUSED",1,true) then
+          rows[#rows+1]={
+            id=id,
+            name=def.name,
+            index=type(def.index)=="number" and def.index or 99999,
+            pp=tonumber(def.pp) or 0,
+            known=known[id]==true,
+          }
+        end
+      end
+    end
+
+    table.sort(rows,function(a,b)
+      local ai=tonumber(a.index) or 99999
+      local bi=tonumber(b.index) or 99999
+      if ai~=bi then return ai<bi end
+      local an=tostring(a.name or a.id or "")
+      local bn=tostring(b.name or b.id or "")
+      if an~=bn then return an<bn end
+      return tostring(a.id)<tostring(b.id)
+    end)
+    return rows
+  end
+
+  local function selectedMoveMon(game)
+    local party=game and game.save and game.save.party
+    return party and party[moveEditor.partySlot] or nil
+  end
+
+  local function setMoveSlot(game,mon,slot,moveId)
+    if not (game and mon and type(slot)=="number" and slot>=1 and slot<=4) then
+      return false,"invalid slot"
+    end
+    local def=game.data and game.data.moves and game.data.moves[moveId]
+    if type(def)~="table" then return false,"unknown move" end
+
+    mon.moves=mon.moves or {}
+
+    -- A GameShark-taught move is a fresh move: full base PP and no inherited
+    -- PP Ups from whatever move previously occupied the slot.
+    local base=math.max(0,math.floor(tonumber(def.pp) or 0))
+    local entry={ id=moveId, pp=base }
+
+    -- Gen 2 stores maxPp on the move instance. Keeping it on Gen 1 is harmless,
+    -- but only add it where the current save is actually Gen 2.
+    if isGold(game) then entry.maxPp=base end
+
+    mon.moves[slot]=entry
+
+    -- Ensure compact sequential slots. This matters if an old/debug save had
+    -- a hole in its move table.
+    local compact={}
+    for i=1,4 do
+      local mv=mon.moves[i]
+      if type(mv)=="table" and mv.id then compact[#compact+1]=mv end
+    end
+    mon.moves=compact
+    return true
+  end
+
+  local function teachMove(game,mon,moveId)
+    if not (game and mon and moveId) then return false,"missing target" end
+    mon.moves=mon.moves or {}
+
+    -- Never create duplicate move slots. Selecting an already-known move just
+    -- restores its PP and treats the operation as successful.
+    for _,mv in ipairs(mon.moves) do
+      if mv.id==moveId then
+        local def=game.data and game.data.moves and game.data.moves[moveId]
+        local base=def and tonumber(def.pp) or 0
+        local bonus=math.floor((base or 0)/5)*(mv.ppUps or 0)
+        local max=math.max(0,(base or 0)+bonus)
+        mv.pp=max
+        if isGold(game) then mv.maxPp=max end
+        return true,"known"
+      end
+    end
+
+    if #mon.moves<4 then
+      return setMoveSlot(game,mon,#mon.moves+1,moveId)
+    end
+    return false,"full"
+  end
+
   local function refillMovePP(game,mv,gold)
     if type(mv)~="table" or not mv.id then return end
     local maxPP
@@ -1462,6 +1575,141 @@ return function(mod)
   end})
 
 
+  mod.content.screens:register(MOVE_SLOT_SCREEN,{new=function(game)
+    local mon=selectedMoveMon(game)
+    local newDef=game and game.data and game.data.moves
+      and game.data.moves[moveEditor.moveId]
+    local newName=(newDef and newDef.name) or moveEditor.moveName
+      or moveEditor.moveId or "MOVE"
+
+    local items={}
+    for slot=1,4 do
+      local mv=mon and mon.moves and mon.moves[slot]
+      local def=mv and game.data and game.data.moves and game.data.moves[mv.id]
+      items[#items+1]={
+        label="SLOT "..tostring(slot),
+        right=(def and def.name) or (mv and mv.id) or "EMPTY",
+        slot=slot,
+      }
+    end
+    items[#items+1]={label="CANCEL",kind="cancel"}
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"REPLACE MOVE",items,{
+      pageJump=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.moveSlotIndex=current.index or uiPos.moveSlotIndex
+        uiPos.moveSlotScroll=current.scroll or uiPos.moveSlotScroll
+
+        if item.kind=="cancel" then
+          current:close()
+          mod.ui.push(game,MOVE_PICK_SCREEN)
+          return
+        end
+
+        if mon and moveEditor.moveId then
+          setMoveSlot(game,mon,item.slot,moveEditor.moveId)
+        end
+        current:close()
+        mod.ui.push(game,MOVE_PARTY_SCREEN)
+      end,
+      onCancel=function() mod.ui.push(game,MOVE_PICK_SCREEN) end,
+      footer="A:REPLACE B:BACK"
+    })
+    menu.index=math.max(1,math.min(uiPos.moveSlotIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.moveSlotScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(MOVE_PICK_SCREEN,{new=function(game)
+    local mon=selectedMoveMon(game)
+    local rows=moveRows(game,mon)
+    local items={}
+
+    for _,row in ipairs(rows) do
+      items[#items+1]={
+        label=row.name,
+        right=row.known and "KNOWN" or ("PP"..tostring(row.pp)),
+        value=row,
+      }
+    end
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"CHOOSE MOVE",items,{
+      pageJump=true,
+      keyRepeat=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.movePickIndex=current.index or uiPos.movePickIndex
+        uiPos.movePickScroll=current.scroll or uiPos.movePickScroll
+
+        local row=item.value
+        if not (type(row)=="table" and type(row.id)=="string") then return end
+
+        moveEditor.moveId=row.id
+        moveEditor.moveName=row.name
+
+        local ok,reason=teachMove(game,mon,row.id)
+        current:close()
+
+        if ok then
+          -- Added to a free slot, or selected a move already known.
+          mod.ui.push(game,MOVE_PARTY_SCREEN)
+        elseif reason=="full" then
+          mod.ui.push(game,MOVE_SLOT_SCREEN)
+        else
+          mod.ui.push(game,MOVE_PARTY_SCREEN)
+        end
+      end,
+      onCancel=function() mod.ui.push(game,MOVE_PARTY_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(uiPos.movePickIndex,math.max(1,#items)))
+    menu.scroll=math.max(0,math.min(uiPos.movePickScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(MOVE_PARTY_SCREEN,{new=function(game)
+    local party=game and game.save and game.save.party or {}
+    local items={}
+
+    for i,mon in ipairs(party) do
+      local def=editorSpeciesDef(mon,game)
+      local name=(mon.nickname and mon.nickname~="" and mon.nickname)
+        or (def and def.name) or mon.name or mon.species or ("SLOT "..i)
+      items[#items+1]={
+        label=tostring(i)..". "..name,
+        right="L"..tostring(mon.level or 1),
+        slot=i,
+      }
+    end
+    items[#items+1]={label="BACK",kind="back"}
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"TEACH MOVE",items,{
+      pageJump=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.movePartyIndex=current.index or uiPos.movePartyIndex
+        uiPos.movePartyScroll=current.scroll or uiPos.movePartyScroll
+
+        if item.kind=="back" then
+          current:close()
+          mod.ui.push(game,MAIN_SCREEN)
+          return
+        end
+
+        moveEditor.partySlot=item.slot
+        current:close()
+        mod.ui.push(game,MOVE_PICK_SCREEN)
+      end,
+      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(uiPos.movePartyIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.movePartyScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
   mod.content.screens:register(ITEM_QTY_SCREEN,{new=function(game)
     local id=giveItemState.itemId
     local name=giveItemState.itemName or id or "ITEM"
@@ -1846,6 +2094,7 @@ return function(mod)
       right=enabled("wild_pick") and "ON >" or "OFF >",
       kind="wild_menu"
     }
+    items[#items+1]={label="TEACH MOVE",right=">",kind="teach_move"}
     items[#items+1]={label="GIVE ITEM",right=">",kind="give_item"}
     items[#items+1]={label="TELEPORT",right=">",kind="teleport"}
     items[#items+1]={label="DV / EV EDITOR",right=">",kind="party_edit"}
@@ -1860,6 +2109,11 @@ return function(mod)
       if item.kind=="wild_menu" then
         current:close()
         mod.ui.push(game,WILD_SCREEN)
+        return
+      end
+      if item.kind=="teach_move" then
+        current:close()
+        mod.ui.push(game,MOVE_PARTY_SCREEN)
         return
       end
       if item.kind=="give_item" then
@@ -1890,6 +2144,13 @@ return function(mod)
     return menu
   end})
 
+  mod.exports.moveRows=function(mon,game) return moveRows(game or mod.game,mon) end
+  mod.exports.teachMove=function(mon,moveId,game)
+    return teachMove(game or mod.game,mon,moveId)
+  end
+  mod.exports.setMoveSlot=function(mon,slot,moveId,game)
+    return setMoveSlot(game or mod.game,mon,slot,moveId)
+  end
   mod.exports.itemRows=function(game) return itemRows(game or mod.game) end
   mod.exports.giveItem=function(id,qty,game) return addItemToBag(game or mod.game,id,qty) end
   mod.exports.teleportRows=function(game) return teleportRows(game or mod.game) end

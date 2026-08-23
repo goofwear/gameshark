@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.6] - 2026-08-22
+
+### Added
+- Added **TEACH MOVE** for Red, Blue, Yellow, Gold and Silver.
+- Choose a party Pokemon, then choose any move from the running game's complete
+  move table.
+- Bypasses species learnsets, TM/HM compatibility and normal move restrictions.
+- Adds directly to a free slot when fewer than four moves are known.
+- When all four slots are occupied, lets the player choose exactly which move
+  slot to overwrite.
+- Allows HM moves to be assigned or overwritten.
+- Newly assigned moves begin at full base PP.
+- Prevents duplicate move entries; selecting an already-known move restores PP.
+- Move catalog is generated from `game.data.moves`, so Gen 1 and Gen 2 use their
+  own native move definitions.
+
+
 ## [0.7.5] - 2026-08-21
 
 ### Fixed
