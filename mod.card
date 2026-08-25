@@ -3,9 +3,9 @@ return {
   author = "goofwear",
   tags = { "tool", "gameshark", "cheats", "gen1", "gen2" },
   differences = {
-    changed = { "One GAMESHARK menu automatically adapts to Red/Blue/Yellow or Gold." },
-    added = { "Pokemon Gold / Gen 2 support", "Per-generation save handling", "Universal wild Pokemon picker" },
-    known = { "Safari cheats are Gen 1 only.", "Gold support targets Gen1Recomp 0.1.79+ and current dev API." }
+    changed = { "One GAMESHARK menu automatically adapts to Red/Blue/Yellow or Gold/Silver/Crystal." },
+    added = { "Pokemon Gold/Silver/Crystal / Gen 2 support", "Per-generation save handling", "Universal wild Pokemon picker" },
+    known = { "Safari cheats are Gen 1 only.", "Gen 2 support targets Gen1Recomp 0.1.79+ and current dev API." }
   },
   compat = { engine = ">=0.1.79 || =0.0.0-dev", modApi = 2 },
 }

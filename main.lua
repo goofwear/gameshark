@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.6
+-- GameShark Compatibility 0.7.7
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -48,9 +48,9 @@ local GEN1_BADGES = {
 local JOHTO_BADGES = { "ZEPHYR","HIVE","PLAIN","FOG","MINERAL","STORM","GLACIER","RISING" }
 local KANTO_BADGES = { "BOULDER","CASCADE","THUNDER","RAINBOW","SOUL","MARSH","VOLCANO","EARTH" }
 
-local function isGold(game)
+local function isGen2(game)
   local s=game and game.save
-  return s and (s.version=="gold" or s.generation==2) or false
+  return s and s.generation==2 or false
 end
 local function cleanCode(v) return (tostring(v or ""):upper():gsub("[^0-9A-F]", "")) end
 local function parseCode(v)
@@ -306,7 +306,7 @@ return function(mod)
 
     -- Gen 2 stores maxPp on the move instance. Keeping it on Gen 1 is harmless,
     -- but only add it where the current save is actually Gen 2.
-    if isGold(game) then entry.maxPp=base end
+    if isGen2(game) then entry.maxPp=base end
 
     mon.moves[slot]=entry
 
@@ -334,7 +334,7 @@ return function(mod)
         local bonus=math.floor((base or 0)/5)*(mv.ppUps or 0)
         local max=math.max(0,(base or 0)+bonus)
         mv.pp=max
-        if isGold(game) then mv.maxPp=max end
+        if isGen2(game) then mv.maxPp=max end
         return true,"known"
       end
     end
@@ -377,7 +377,7 @@ return function(mod)
   -- the active party mon's moves.
   local function refillPlayerPP(game)
     if not game then return end
-    local gold=isGold(game)
+    local gold=isGen2(game)
     local save=game.save
     if save and type(save.party)=="table" then
       for _,mon in ipairs(save.party) do refillMonPP(game,mon,gold) end
@@ -406,7 +406,7 @@ return function(mod)
   end
 
   local function grantBadges(save)
-    if save.version=="gold" or save.generation==2 then
+    if save.generation==2 then
       save.player=save.player or {}
       save.player.badges=save.player.badges or {}
       save.player.kantoBadges=save.player.kantoBadges or {}
@@ -519,7 +519,7 @@ return function(mod)
   end
 
   local function burnEnemy(game)
-    if isGold(game) then
+    if isGen2(game) then
       for _,s in ipairs(goldBattleScreens(game)) do
         local mon=s.battle and s.battle.enemy
         -- Gen 2 stores the full status id ("burn"), while Gen 1 stores "BRN".
@@ -542,7 +542,7 @@ return function(mod)
     for _,m in ipairs(mon.moves) do if m.id=="SURF" then knows=true break end end
     if not knows then tempMove={id="SURF",pp=15}; table.insert(mon.moves,tempMove) end
     local ok=false
-    if isGold(game) then
+    if isGen2(game) then
       local player=save.player or {}; save.player=player; player.badges=player.badges or {}
       local hadFog=player.badges.FOG; player.badges.FOG=true
       local world=game.world
@@ -584,7 +584,7 @@ return function(mod)
     if not mod.world then return false,"world API unavailable" end
 
     local level=state.wildLevel
-    local gold=isGold(game)
+    local gold=isGen2(game)
 
     -- Gold's Mon constructor runs shiny.roll/gender.roll while the Gen-2
     -- start_battle script verb constructs the enemy. Reuse the same pending
@@ -808,7 +808,7 @@ return function(mod)
 
   local function teleportRows(game)
     local rows={}
-    if isGold(game) then
+    if isGen2(game) then
       local landmarks=game and game.data and game.data.gen2Landmarks
       local spawns=landmarks and landmarks.spawns or {}
       for _,spawnId in ipairs(GEN2_TELEPORT_SPAWNS) do
@@ -923,7 +923,7 @@ return function(mod)
     local oldHp=mon.hp or oldMax
     local wasFull=oldHp>=oldMax
 
-    if isGold(game) then
+    if isGen2(game) then
       -- Use the exact same Gen-2 routine Gold's Summary screen uses.
       local ok,Mon=pcall(require,"src.battle.gen2.Mon")
       if ok and Mon and type(Mon.refreshStats)=="function" then
@@ -1031,7 +1031,7 @@ return function(mod)
     local save=game and game.save
     if save then
       if enabled("cash") then
-        if isGold(game) then
+        if isGen2(game) then
           save.player=save.player or {}
           save.player.money=999999
         else
@@ -1041,7 +1041,7 @@ return function(mod)
       if enabled("coins") then
         -- Both generations use a 4-digit Coin Case capped at 9,999.
         -- Keep it full every input step, making Game Corner spending infinite.
-        if isGold(game) then
+        if isGen2(game) then
           save.player=save.player or {}
           save.player.coins=9999
         else
@@ -1061,7 +1061,7 @@ return function(mod)
           mon.hp=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp
         end
 
-        if isGold(game) then
+        if isGen2(game) then
           for _,screen in ipairs(goldBattleScreens(game)) do
             local active=screen.battle and screen.battle.player
             if active then
@@ -1077,12 +1077,12 @@ return function(mod)
           end
         end
       end
-      if not isGold(game) and save.safari then
+      if not isGen2(game) and save.safari then
         if enabled("safari_balls") then save.safari.balls=99 end
         if enabled("safari_time") then save.safari.steps=240 end
       end
     end
-    if isGold(game) then
+    if isGen2(game) then
       for _,s in ipairs(goldBattleScreens(game)) do if enabled("steal_trainer") and not s.battle.wild then patchGoldTrainer(s) else unpatchGoldTrainer(s) end end
     else
       for _,b in ipairs(gen1BattleStates(game)) do
@@ -1106,7 +1106,7 @@ return function(mod)
         -- destroys the scene and produces a blank screen.  Red/Blue/Yellow
         -- therefore keep the older working behavior: only Teleport itself was
         -- closed when the destination was chosen.
-        if isGold(game) and game and game.stack
+        if isGen2(game) and game and game.stack
            and type(game.stack.clear)=="function" then
           game.stack:clear()
         end
@@ -1126,7 +1126,7 @@ return function(mod)
         local mon=save.party[1]
         if mon then mon.hp=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp end
       end
-      if isGold(game) then
+      if isGen2(game) then
         for _,screen in ipairs(goldBattleScreens(game)) do
           local active=screen.battle and screen.battle.player
           if active then active.hp=active.maxHp or (active.stats and active.stats.hp) or active.hp end
@@ -1162,7 +1162,7 @@ return function(mod)
       -- Gold constructs the actual Mon after the encounter roll. Carry these
       -- choices into that next matching build for gender/shiny finalization.
       local game=mod.game
-      if isGold(game) and (state.wildGender~="random" or state.wildShiny~="random") then
+      if isGen2(game) and (state.wildGender~="random" or state.wildShiny~="random") then
         state.pendingWild={ species=state.selectedSpecies, level=r.level }
       end
     end
@@ -1231,7 +1231,7 @@ return function(mod)
     local playerSide=(ev.side=="player") or (type(user)=="table" and user.isPlayer==true)
     if not playerSide then return end
 
-    if isGold(game) then
+    if isGen2(game) then
       refillMonPP(game,user,true)
       if battle then refillMonPP(game,battle.player,true) end
     else
@@ -1257,7 +1257,7 @@ return function(mod)
   mod.events:on("battle.damage_dealt", function(ev)
     if not enabled("payday_fix") then return end
     local game=mod.game
-    if not isGold(game) then return end
+    if not isGen2(game) then return end
     if not ev or ev.moveId~="PAY_DAY" or not ev.battle then return end
     if ev.user~=ev.battle.player then return end
     if (ev.damage or 0)<=0 then return end
@@ -1271,7 +1271,7 @@ return function(mod)
   mod.events:on("battle.ended", function(ev)
     if not enabled("payday_fix") then return end
     local game=mod.game
-    if not isGold(game) then return end
+    if not isGen2(game) then return end
     local battle=ev and ev.battle
     local amount=battle and battle._gamesharkPayDay or 0
     if amount<=0 then return end
@@ -1338,9 +1338,12 @@ return function(mod)
   end)
 
   mod.exports.parse=parseCode
-  mod.exports.game=function(game) return isGold(game) and "gold" or ((game and game.save and game.save.version) or "gen1") end
+  mod.exports.game=function(game)
+    local save=game and game.save
+    return (save and save.version) or (save and save.generation==2 and "gen2") or "gen1"
+  end
   mod.exports.list=function(game)
-    local gold=isGold(game); local out={}
+    local gold=isGen2(game); local out={}
     for _,c in ipairs(CHEATS) do
       local supported=not ((gold and c.gen2==false)
         or ((not gold) and c.gen2only==true))
@@ -1448,7 +1451,7 @@ return function(mod)
   end})
 
   mod.content.screens:register(WILD_SCREEN,{new=function(game)
-    local gold=isGold(game)
+    local gold=isGen2(game)
     local def=selectedDef()
     local speciesName=(def and def.name) or state.selectedSpecies
 
@@ -1767,7 +1770,7 @@ return function(mod)
     local items={}
     for _,row in ipairs(rows) do
       local right=""
-      if isGold(game) then
+      if isGen2(game) then
         if row.pocket=="BALL" then right="BALL"
         elseif row.pocket=="KEY_ITEM" then right="KEY"
         elseif row.pocket=="TM_HM" then right="TM"
@@ -2007,7 +2010,7 @@ return function(mod)
       items[#items+1]={label="ATK",right=tostring(mon.stats.attack or 0),kind="readonly"}
       items[#items+1]={label="DEF",right=tostring(mon.stats.defense or 0),kind="readonly"}
       items[#items+1]={label="SPD",right=tostring(mon.stats.speed or 0),kind="readonly"}
-      if isGold(game) then
+      if isGen2(game) then
         items[#items+1]={label="SP ATK",right=tostring(mon.stats.specialAttack or 0),kind="readonly"}
         items[#items+1]={label="SP DEF",right=tostring(mon.stats.specialDefense or 0),kind="readonly"}
       else
@@ -2073,7 +2076,7 @@ return function(mod)
   end})
 
   mod.content.screens:register(MAIN_SCREEN,{new=function(game)
-    local gold=isGold(game); local items={}
+    local gold=isGen2(game); local items={}
     for _,c in ipairs(CHEATS) do
       local supported=not ((gold and c.gen2==false)
         or ((not gold) and c.gen2only==true))
@@ -2088,10 +2091,11 @@ return function(mod)
       end
     end
     items[#items+1]={
-      -- Full wording does not fit beside OFF > on the original 160px Gen-1
-      -- ListMenu. Keep the full WILD POKEMON title inside its submenu.
-      label="WILD PKMN",
-      right=enabled("wild_pick") and "ON >" or "OFF >",
+      -- Keep the submenu arrow on the left label so ON/OFF stays in the
+      -- exact same right-aligned column as every other toggle row. The full
+      -- WILD POKEMON wording remains the submenu title.
+      label="WILD PKMN >",
+      right=enabled("wild_pick") and "ON" or "OFF",
       kind="wild_menu"
     }
     items[#items+1]={label="TEACH MOVE",right=">",kind="teach_move"}

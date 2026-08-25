@@ -1,7 +1,7 @@
 {
   "id": "GameShark",
   "name": "GameShark Compatibility",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
@@ -15,6 +15,6 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat and debug menu for Gen1Recomp Red, Blue, Yellow, Gold and Silver, including unrestricted Teach Move, Give Item, Teleport, DV/EV editing, Wild Pokemon setup, Instant Battle, and classic cheats.",
+  "description": "Universal GameShark-style cheat and debug menu for Gen1Recomp Red, Blue, Yellow, Gold, Silver and Crystal, including unrestricted Teach Move, Give Item, Teleport, DV/EV editing, Wild Pokemon setup, Instant Battle, and classic cheats.",
   "github": "goofwear/gameshark"
 }

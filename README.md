@@ -659,3 +659,33 @@ Designed for:
 The implementation uses the same plain party move records that Gen1Recomp's
 own save editor and Gen-2 move-learning code use. It does not depend on another
 move-manager mod.
+
+
+## v0.7.7 — Silver/Crystal targeting + modkit cleanup + Wild row alignment
+
+### Gen 2 targeting
+
+GameShark now treats Gen 2 by capability/generation instead of checking for the
+literal `gold` version string. This removes the two `MK409` version allow-list
+warnings reported by `modkit.py gen2check --strict` and lets the same Gen 2
+paths serve **Gold, Silver, and Crystal**.
+
+The manifest continues to declare `games: ["gen1", "gen2"]`, which current
+Gen1Recomp resolves to Red, Blue, Yellow, Gold, Silver, and Crystal.
+
+### Wild Pokemon row spacing
+
+The narrow main menu now renders the row as:
+
+```text
+WILD PKMN >          OFF
+```
+
+`ON` / `OFF` is now the same right-aligned field used by every other cheat.
+The submenu itself still uses the full **WILD POKEMON** title.
+
+### Validation
+
+This release was prepared specifically to satisfy the current modkit checks,
+including removal of the Gen-2 strict-check warnings caused by hard-coded Gold
+version tests.

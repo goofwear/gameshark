@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.7] - 2026-08-24
+
+### Fixed
+- Removed hard-coded `version == "gold"` Gen-2 checks that triggered MK409.
+- Gen-2 branches now key off `save.generation == 2`, covering Gold, Silver, and Crystal.
+- Fixed the main-menu Wild Pokemon ON/OFF alignment by moving the submenu arrow into the left label and keeping the right field exactly `ON` or `OFF`.
+- `mod.exports.game()` now reports the actual running game version instead of reporting every Gen-2 game as Gold.
+
+### Compatibility
+- Declared support remains `gen1 + gen2`: Red, Blue, Yellow, Gold, Silver, Crystal.
+
+
 ## [0.7.6] - 2026-08-22
 
 ### Added
