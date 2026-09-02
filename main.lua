@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.7
+-- GameShark Compatibility 0.7.8
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -51,6 +51,14 @@ local KANTO_BADGES = { "BOULDER","CASCADE","THUNDER","RAINBOW","SOUL","MARSH","V
 local function isGen2(game)
   local s=game and game.save
   return s and s.generation==2 or false
+end
+
+-- Crystal-only capability probe. Gold and Silver do not contain the GS Ball
+-- item/event scripts; Crystal does. Checking the active game's decoded item
+-- table keeps this generation-safe without hard-coding save.version strings.
+local function hasCrystalGsBallEvent(game)
+  local items=game and game.data and game.data.items
+  return isGen2(game) and type(items)=="table" and type(items.GS_BALL)=="table"
 end
 local function cleanCode(v) return (tostring(v or ""):upper():gsub("[^0-9A-F]", "")) end
 local function parseCode(v)
@@ -150,6 +158,31 @@ return function(mod)
   end
   local function enabled(effect) return state.active[effect]==true end
   local function setEnabled(effect,value) state.active[effect]=value==true; persist() end
+
+  -- Emulate the real Crystal GameShark code 010B3CBE. In the original game
+  -- that writes $0B to sGSBallFlag. Gen1Recomp represents that SRAM byte as
+  -- save.crystal.gsBall = "have"; the native Crystal script then hands out
+  -- the GS Ball when the player tries to leave Goldenrod Pokemon Center.
+  local function enableCelebiEvent(game)
+    if not hasCrystalGsBallEvent(game) then
+      return false,"GS Ball event is Crystal-only"
+    end
+    local save=game and game.save
+    if not save then return false,"save unavailable" end
+    save.crystal=save.crystal or {}
+    save.crystal.gsBall="have"
+    return true
+  end
+
+  local function celebiEventStatus(game)
+    if not hasCrystalGsBallEvent(game) then return nil end
+    local crystal=game.save and game.save.crystal
+    local v=crystal and crystal.gsBall
+    if v=="have" then return "READY" end
+    if v=="given" then return "GIVEN" end
+    if v=="used" then return "USED" end
+    return "START"
+  end
 
   local function ensureItem(save,id,qty)
     save.inventory=save.inventory or {}
@@ -2098,6 +2131,13 @@ return function(mod)
       right=enabled("wild_pick") and "ON" or "OFF",
       kind="wild_menu"
     }
+    if hasCrystalGsBallEvent(game) then
+      items[#items+1]={
+        label="CELEBI EVENT",
+        right=celebiEventStatus(game),
+        kind="celebi_event"
+      }
+    end
     items[#items+1]={label="TEACH MOVE",right=">",kind="teach_move"}
     items[#items+1]={label="GIVE ITEM",right=">",kind="give_item"}
     items[#items+1]={label="TELEPORT",right=">",kind="teleport"}
@@ -2113,6 +2153,12 @@ return function(mod)
       if item.kind=="wild_menu" then
         current:close()
         mod.ui.push(game,WILD_SCREEN)
+        return
+      end
+      if item.kind=="celebi_event" then
+        enableCelebiEvent(game)
+        current:close()
+        mod.ui.push(game,MAIN_SCREEN)
         return
       end
       if item.kind=="teach_move" then
@@ -2148,6 +2194,8 @@ return function(mod)
     return menu
   end})
 
+  mod.exports.hasCelebiEvent=function(game) return hasCrystalGsBallEvent(game or mod.game) end
+  mod.exports.enableCelebiEvent=function(game) return enableCelebiEvent(game or mod.game) end
   mod.exports.moveRows=function(mon,game) return moveRows(game or mod.game,mon) end
   mod.exports.teachMove=function(mon,moveId,game)
     return teachMove(game or mod.game,mon,moveId)

@@ -1,691 +1,257 @@
-# GameShark Compatibility v0.7.6
+# GameShark Compatibility v0.7.8
 
-**Author: goofwear**
+**Author:** goofwear  
+**Mod ID:** `GameShark`  
+**Repository:** https://github.com/goofwear/gameshark
 
-A single GameShark-style cheat mod for Gen1Recomp that automatically supports both **Gen 1 (Red/Blue/Yellow)** and **Gen 2 (Pokemon Gold)**.
+GameShark Compatibility is a standalone GameShark-style cheat and debug menu for **Gen1Recomp**. It automatically adapts to the active game and supports **Gen 1 and Gen 2** without depending on another cheat, move-manager, item-manager, or DV/EV mod.
 
-## Requirements
+## Supported games
 
-- Gen1Recomp 0.1.79 or newer in the 0.1.x line, or a compatible `0.0.0-dev` source build.
-- Mod API 2.
-
-The manifest explicitly targets both generations with `"games": ["gen1", "gen2"]`.
-
-## Cheats
-
-- Wall Walk
-- No Random Battles
-- Master Ball x99
-- Max Money
-- Rare Candy x99
-- Party Slot 1 Full HP
-- All Badges
-- One-Hit KO
-- Burn Foe
-- Steal Trainer Pokemon
-- Wild Pokemon Picker
-- Surfboard action
-- Safari Balls x99 *(Gen 1 only)*
-- Safari Time *(Gen 1 only)*
-
-On Gold, **All Badges** grants all eight Johto badges and all eight Kanto badges.
-
-## Automatic game detection
-
-The mod reads the active save supplied by Gen1Recomp. Gold saves identify themselves as `version = "gold"` / generation 2. No ROM filename or filesystem access is used.
-
-The cheat screen title shows `GAMESHARK G1` or `GAMESHARK G2` so the user can see what was detected.
-
-## GameShark code references
-
-The mod translates authentic GameShark-style effects into Gen1Recomp's native state. Some original cheats were multi-line RAM patches; the menu exposes the equivalent effect rather than emulating raw Game Boy RAM.
-
-Examples for Gold include `01000BD2` (no random battles), `010000D1` (one-hit KO), `010116D1` (steal trainer Pokemon), the `010AA3CE`-`010AA6CE` walk-through-walls family, and the `01??EDD0` wild Pokemon modifier family.
-
-## Sandbox compatibility
-
-This version does not use `io`, `os.getenv`, `os.execute`, `love.filesystem`, `dofile`, `loadfile`, or `debug`. It uses the public mod API and game objects supplied to public hooks.
-
-## Installation
-
-Copy the `gen1recomp_gameshark_v0.7.6_universal` folder into the Gen1Recomp `mods` folder, restart the game, enable **GameShark Compatibility**, then open **START -> GAMESHARK**.
-
-Delete older GameShark Compatibility folders first so only one version is installed.
-
-## Notes
-
-Save-data cheats such as items and badges make real changes to the active save. Disabling the cheat does not remove items or badges already granted. Save before experimenting with trainer capture or wall walking.
-
-
-## v0.7.6 fixes
-
-- Fixed **ONE HIT KO** on Pokemon Gold / Gen 2.
-  Gold's `battle.damage` hook uses the active Pokemon tables directly, so the
-  mod now identifies player and enemy ownership through the live battle object.
-- Fixed **BURN FOE** on Pokemon Gold / Gen 2.
-  Gold stores the status id as `burn`; Gen 1 uses `BRN`.
-- Added the repository to the manifest for Gen1Recomp's mod updater:
-
-```json
-"github": "goofwear/gameshark"
-```
-
-Repository: https://github.com/goofwear/gameshark
-
-
-## v0.7.6 — Gold Wild Pick customization
-
-When playing Pokemon Gold / Gen 2, **WILD PICK** now has two additional controls:
-
-- **WILD GENDER** — `RND`, `M`, or `F`
-- **WILD SHINY** — `RND`, `YES`, or `NO`
-
-Choose the Pokemon with **PICK POKEMON**, configure the two options, then enable
-**WILD PICK**. The normal encounter level and encounter rate are still preserved.
-
-Genderless Pokemon automatically show `N/A` and keep Gen 2's native `unknown`
-gender. These controls are intentionally not shown in Gen 1 because Red/Blue do
-not have native Pokemon gender or shininess.
-
-## Optional Battle Art first-person compatibility
-
-`WALL WALK` now also supports the first-person free-movement path used by
-**Battle Art Voxel Fork** (`BATTLE_ART_VOXEL_FORK`). There is **no dependency**:
-
-- GameShark does not require Battle Art.
-- Battle Art is not listed in `dependencies` or `optional_dependencies`.
-- If Battle Art is absent, no compatibility code activates.
-- If it is present and exports its public companion-module interface, GameShark
-  adapts the first-person free walk only while `WALL WALK` is enabled.
-
-Map bounds remain protected.
-
-
-## v0.7.6 fixes
-
-- **ALL BADGES on Gold now creates exactly 16 badges**: eight Johto and eight
-  Kanto. Numeric duplicate badge aliases left by v0.5.0-v0.5.2 are removed.
-- `growthRates` and `tmhmMoves` are excluded from **PICK POKEMON** because they
-  are internal Gold data records, not Pokemon.
-- The GameShark menu now preserves its cursor and scroll position after toggling
-  cheats or changing Wild Pick settings.
-- The Pokemon picker also preserves its cursor and scroll position after a
-  selection instead of jumping back to the top.
-
-
-## v0.7.6 — Gen1Recomp 0.1.93 compatibility
-
-### Persistent Gold shinies
-Gold Wild Pick no longer relies only on the `shiny.roll` return value.
-When **WILD SHINY = YES**, GameShark now writes an authentic Gen-2 shiny DV
-pattern into the spawned Pokemon and synchronizes its stored shiny/gender
-identity. This keeps the Pokemon shiny after capture and later recalculation.
-
-`WILD SHINY = NO` likewise breaks a naturally shiny DV pattern so the choice
-remains non-shiny.
-
-### Gen 2 Pay Day compatibility
-Gen1Recomp 0.1.93 contains Pay Day in Gold's move data but currently lacks the
-Gen-2 Pay Day battle effect. **PAY DAY FIX** is therefore available on Gold
-and is enabled by default.
-
-A successful player Pay Day hit accumulates `2 x user level` money. The
-accumulated amount is added to the player's money after winning the battle.
-The option can be disabled from the GameShark menu if a later engine version
-implements Pay Day itself.
-
-### Engine version range
-The old upper bound `<0.2.0` has been removed. The manifest now uses:
-
-```text
->=0.1.79 || =0.0.0-dev
-```
-
-This prevents the mod from being rejected merely because Gen1Recomp reaches
-0.2.0 or later. `modApi = 2` remains declared. Future engine/API changes can
-still require a GameShark update even though the manifest no longer imposes
-an artificial upper version ceiling.
-
-
-## v0.7.6
-
-### Fixed: Steal Trainer Pokemon on Red / Blue / Yellow
-
-Gen 1's native capture path ends a caught Pokemon battle with the result
-`caught`. That is correct for a wild battle, but a trainer encounter only marks
-the trainer NPC defeated when the result is `win`.
-
-When **STEAL TRAINER** is enabled, v0.7.6 now:
-
-1. uses the normal capture animation and forced catch;
-2. keeps the captured Pokemon in the normal party/PC flow;
-3. preserves Pokedex registration and nickname handling;
-4. restores the battle's trainer identity after storage;
-5. changes that stolen-trainer capture result from `caught` to `win`;
-6. returns to the overworld with the trainer marked defeated instead of
-   immediately restarting the encounter.
-
-Gold's existing trainer-capture implementation is unchanged.
-
-### Added: Max Coins
-
-**MAX COINS** keeps the Game Corner Coin Case at **9,999 coins** while enabled.
-It supports both generations:
-
-- Gen 1: `save.coins = 9999`
-- Gen 2 / Gold: `save.player.coins = 9999`
-
-The cheat does not grant a Coin Case item; it fills the player's existing coin
-balance. Because the balance is refreshed continuously, purchased prizes and
-slot-machine bets are effectively unlimited while the cheat is ON.
-
-
-## v0.7.6
-
-### Added: Infinite PP
-
-A new **INFINITE PP** toggle prevents the player's Pokemon from running out of
-move PP during battle.
-
-- Only the player's Pokemon are refilled; opponents are not affected.
-- Existing moves at 0 PP are restored when the cheat is enabled.
-- PP is restored to the move's true maximum, including PP Up bonuses.
-- Gen 1 active battle `curMoves` and saved party moves are both maintained.
-- Gen 2 / Gold uses each move's `maxPp` value.
-- The `battle.move_used` hook restores PP immediately after normal PP
-  consumption so the move remains available every turn.
-
-### Added: PP UP x99
-
-A new **PP UP x99** toggle keeps **99 PP Ups** in the player's bag, matching
-the behavior of the existing Master Ball and Rare Candy cheats.
-
-The cheat grants the normal `PP_UP` item, so it uses Gen1Recomp's normal item
-UI and PP-Up rules when the player applies one to a move.
-
-
-## Mod ID migration
-
-Starting with the clean-ID v0.7.6 package, the manifest ID and installed folder
-are both:
-
-```text
-GameShark
-```
-
-Older builds used `gameshark_compat`. Because Gen1Recomp identifies installed
-mods by manifest ID, users upgrading from an older build should remove the old
-`gameshark_compat` installation once, then install this `GameShark` package.
-Future updates should continue using the `GameShark` ID.
-
-
-## v0.7.6 — Red / Blue / Yellow trainer-capture fix
-
-The extremely long Poké Ball wobble was caused by older universal builds
-forcing the Gen 1 capture seam with `true, 255`. Current Gen1Recomp ultimately
-uses that second value as the shake count, so the ball could visibly wobble
-hundreds of times before the capture finished.
-
-v0.7.6 changes the Gen 1 path:
-
-- **STEAL TRAINER** temporarily wraps the active battle's `catchAttempt`.
-- The stolen trainer Pokémon is a deterministic successful catch.
-- The caught animation uses the normal **3-wobble** count.
-- The regular capture/storage flow still runs, so party/PC, Pokédex, nickname
-  and caught-event behavior are preserved.
-- The existing GameShark trainer-capture result fix still converts the completed
-  capture to **win**, so the trainer is marked defeated afterward.
-
-This applies to Red, Blue and Yellow because they share Gen1Recomp's Gen 1
-BattleState capture implementation.
-
-Gold's working trainer-capture code is unchanged.
-
-
-## v0.7.6 — Infinite HP fix
-
-The old **SLOT 1 HP** implementation mainly refilled `save.party[1].hp`.
-On newer Gen1Recomp builds that is not sufficient for true in-battle
-invulnerability because move damage is resolved on the live battler during the
-battle step and can trigger faint handling before a later refill.
-
-The option is now named **INFINITE HP** (the saved effect id remains
-`party_hp`, so existing users keep their toggle state).
-
-While enabled:
-
-- incoming move damage targeting the player's active Pokemon is changed to 0
-  at the shared `battle.damage` hook;
-- the active live battler is continuously restored to maximum HP;
-- party slot 1 is still restored for backward compatibility;
-- a post-step refill covers residual/status paths that write HP directly.
-
-This uses the shared Gen 1 battle path and therefore applies to Red, Blue and
-Yellow, as well as the existing Gold support.
-
-
-## v0.7.6 — Wild Pokémon setup redesign
-
-Wild Pick is now grouped into a dedicated **WILD POKEMON** submenu instead of
-scattering species, gender, shiny, and the enable switch across the main
-GameShark list.
-
-The submenu shows:
-
-```text
-WILD POKEMON
-  ENABLE WILD PICK   ON/OFF
-  POKEMON            <selected species>
-  LEVEL              AUTO / 1-100
-  GENDER             RANDOM / MALE / FEMALE / GENDERLESS   [Gold only]
-  SHINY              RANDOM / YES / NO                      [Gold only]
-  BACK
-```
-
-### Wild level
-
-- **AUTO** is the default.
-- AUTO preserves the exact level selected by the game's normal encounter table.
-- Choosing **1 through 100** overrides only the encountered Pokémon's level.
-- Species selection, encounter rate, map, and normal encounter triggering are
-  otherwise unchanged.
-- The level setting is saved per GameShark save and remains selected until
-  changed back to AUTO.
-
-### Cleaner main menu
-
-The main GameShark screen now contains one entry:
-
-```text
-WILD POKEMON   ON >
-```
-
-or:
-
-```text
-WILD POKEMON   OFF >
-```
-
-Selecting it opens the full setup screen. This removes the old separate
-`WILD PICK`, `PICK POKEMON`, `WILD GENDER`, and `WILD SHINY` rows from the main
-list while preserving the same underlying `wild_pick` effect id for existing
-saved settings and external integrations.
-
-
-## v0.7.6 — Instant Battle + Wild menu spacing
-
-### Instant Battle
-
-The **WILD POKEMON** screen now includes:
-
-```text
-WILD POKEMON
-  WILD PICK      ON/OFF
-  POKEMON        <species>
-  LEVEL          AUTO / 1-100
-  GENDER         RANDOM / MALE / FEMALE / N/A   [Gold only]
-  SHINY          RANDOM / YES / NO               [Gold only]
-  BATTLE NOW     >
-  BACK
-```
-
-**BATTLE NOW** immediately starts a normal wild battle using the selected
-Pokemon and level. It uses Gen1Recomp's public `mod.world:startWildBattle()`
-service, so the normal battle transition, EXP, evolutions, capture flow,
-blackout handling, battle return, and Pokedex behavior stay intact.
-
-Supported games:
-
-- Pokemon Red
-- Pokemon Blue
-- Pokemon Yellow
-- Pokemon Gold
-
-The battle can be started while standing on an indoor or outdoor map as long as
-the game is in a safe overworld state, the player has a healthy Pokemon, and no
-other battle is already running.
-
-### Level behavior
-
-`LEVEL = AUTO` still means **do not override normal random encounter levels**.
-For Instant Battle, the player must choose a specific level from 1-100. If the
-user selects **BATTLE NOW** while Level is AUTO, GameShark opens the level
-picker instead of silently choosing a level.
-
-### Gold identity options
-
-Instant Gold battles reuse the same Gender and Shiny settings as Wild Pick.
-Genderless Pokemon display `N/A`; no male/female value is forced onto them.
-
-### Spacing cleanup
-
-The old `ENABLE WILD PICK` label was too wide once an `ON/OFF` value was drawn
-in the right column. It is now simply `WILD PICK`. `GENDERLESS` was also
-shortened to `N/A` in the value column. These changes keep the Game Boy-width
-menu columns separated instead of allowing text to overlap.
-
-
-## v0.7.6 — Gold Instant Battle fix
-
-v0.6.0 incorrectly called the Gen-1-only `mod.world:startWildBattle()` helper
-for every game. That made Instant Battle work in Red/Blue/Yellow but silently
-return to the menu in Gold.
-
-v0.7.6 selects the proper supported Gen1Recomp API at runtime:
-
-- **Red / Blue / Yellow:** `mod.world:startWildBattle(species, level)`
-- **Gold:** `mod.world:queueScript({{"start_battle", "wild", species, level}})`
-
-Gold's `start_battle` verb is implemented by its own WorldAPI. It constructs a
-native Gen-2 `Mon`, marks the species seen in the Pokédex, and calls Gold's
-`World:startBattle()` path. It does not depend on the current map having a
-natural wild encounter table, so GameShark Instant Battle can be started while
-inside buildings as well as outside.
-
-The selected Gold Gender and Shiny options are prepared before the Gen-2 Mon is
-constructed, so they remain applicable to Instant Battles.
-
-
-## v0.7.6 — Teleport + DV / EV Editor
-
-### Teleport
-
-A new **TELEPORT >** action is available from the GameShark menu.
-
-It presents the game's standard major travel destinations and teleports the
-player there without requiring Fly, the Fly HM, a badge, or a previously
-visited destination.
-
-Supported games:
 - Pokemon Red
 - Pokemon Blue
 - Pokemon Yellow
 - Pokemon Gold
 - Pokemon Silver
+- Pokemon Crystal
 
-Implementation uses Gen1Recomp's public `mod.world:warpTo()` service. Gen 1
-destinations come from the game's extracted `flyOrder` / `flyWarps` data.
-Gen 2 destinations use the ROM-extracted spawn points for Johto and Kanto.
-GameShark does **not** alter the player's real visited-location flags.
+The manifest targets both generations with:
 
-### DV / EV Editor
+```json
+"games": ["gen1", "gen2"]
+```
 
-A new **DV / EV EDITOR >** action lets the player choose any Pokemon currently
-in the party and edit the values stored on that Pokemon.
+## Requirements
 
-#### DVs
-- Attack: 0-15
-- Defense: 0-15
-- Speed: 0-15
-- Special: 0-15
-- HP DV is displayed read-only because Gen 1 and Gen 2 both derive it from the
-  low bits of the other four DVs.
-- **MAX ALL DVS** sets all four editable DVs to 15.
+- Gen1Recomp `0.1.79` or newer, or a compatible `0.0.0-dev` build
+- Mod API 2
 
-#### EV / Stat EXP
-Pokemon Gen 1 and Gen 2 do not use the modern 0-252 EV system. Their save data
-stores five 16-bit **Stat EXP** values, each ranging from 0 to 65,535:
+The current manifest compatibility expression is:
+
+```text
+>=0.1.79 || =0.0.0-dev
+```
+
+## Installation
+
+The release ZIP should contain the mod inside a top-level `GameShark` folder:
+
+```text
+GameShark-0.7.8.zip
+└── GameShark/
+    ├── manifest.json
+    ├── main.lua
+    ├── README.md
+    ├── CHANGELOG.md
+    └── mod.card
+```
+
+Import the ZIP through Gen1Recomp's mod manager, or copy the `GameShark` folder into the game's `mods` directory. Remove older duplicate GameShark folders before testing a new release.
+
+After enabling the mod, open the normal START menu and choose **GAMESHARK**.
+
+## Main cheats
+
+The available rows adapt to the active generation/game.
+
+- **WALL WALK** — walk through normal map collision
+- **NO BATTLES** — suppress normal random encounters
+- **MASTER BALL** — maintains Master Balls in the bag
+- **MAX MONEY** — keeps money at the supported maximum
+- **MAX COINS** — keeps Game Corner coins at the native maximum
+- **INFINITE PP** — prevents the player's battle moves from running out of PP
+- **PP UP x99** — maintains 99 PP Up items
+- **RARE CANDY** — maintains Rare Candies in the bag
+- **INFINITE HP** — protects/refills the player's active Pokemon
+- **ALL BADGES** — grants the appropriate badges for the active generation
+- **ONE HIT KO** — forces enemy damage to resolve as a knockout
+- **BURN FOE** — applies the active game's burn status to the opponent
+- **SAFARI BALL** — Safari Ball support on Gen 1
+- **SAFARI TIME** — Safari Zone time support on Gen 1
+- **STEAL TRAINER** — permits catching trainer Pokemon through the supported battle path
+- **PAY DAY FIX** — Gen 2 compatibility helper for Pay Day behavior
+
+Save-data cheats make real changes to the active save. Disabling the toggle does not necessarily remove items, badges, money, or other values already written to the save.
+
+## Wild Pokemon
+
+The narrow Gen 1 main menu uses:
+
+```text
+WILD PKMN >          OFF
+```
+
+or:
+
+```text
+WILD PKMN >           ON
+```
+
+Keeping the submenu arrow with the left label leaves `ON` / `OFF` aligned with the other cheat rows.
+
+The full submenu is still titled **WILD POKEMON** and provides:
+
+- Enable/disable Wild Pick
+- Pokemon species selection
+- Optional level override
+- Gender selection where supported
+- Shiny selection where supported
+- **BATTLE NOW** for an immediate selected encounter
+
+If level is left on **AUTO**, normal Wild Pick preserves the game's natural encounter level.
+
+## Instant Battle
+
+**BATTLE NOW** starts a wild battle immediately using the selected Pokemon and level.
+
+GameShark uses generation-appropriate Gen1Recomp battle paths rather than assuming Gen 1 and Gen 2 expose identical APIs.
+
+## Teleport
+
+**TELEPORT** opens a destination picker and moves the player to supported major destinations without requiring the normal Fly restrictions.
+
+Generation-specific UI handling is used so Gen 1 preserves its live overworld state while Gen 2 clears nested overlay menus before the warp.
+
+## Give Item
+
+**GIVE ITEM** lets you:
+
+1. Choose an item from the active game's own item catalog.
+2. Choose a quantity.
+3. Add it directly to the player's inventory.
+
+Stackable items can be added in quantities from 1 through 99. Gen 2 Key Items and HMs are treated as unique items. Newly given items are inserted into the bag order so they appear in the normal inventory UI.
+
+The picker is generated from the running game's decoded item definitions rather than one hard-coded cross-generation list.
+
+## Teach Move
+
+**TEACH MOVE** is an unrestricted move editor:
+
+1. Choose a Pokemon from the party.
+2. Choose any move in the current game's move table.
+3. If a free move slot exists, the move is added.
+4. If all four slots are occupied, choose exactly which slot to replace.
+
+This is intentionally a GameShark/debug feature, so normal species learnsets and TM/HM compatibility restrictions are bypassed. HM moves may also be assigned or overwritten.
+
+A newly assigned move starts with its normal base PP. Selecting a move the Pokemon already knows restores that move's PP rather than creating a duplicate slot.
+
+## DV / EV editor
+
+**DV / EV EDITOR** lets you select a party Pokemon and edit the original Gen 1 / Gen 2 stat-growth values.
+
+### DVs
+
+Editable DVs range from `0` to `15`:
+
+- Attack
+- Defense
+- Speed
+- Special
+
+HP DV is derived from the other four values and is displayed separately.
+
+Convenience option:
+
+- **MAX ALL DVS**
+
+### EV / Stat EXP
+
+Gen 1 and Gen 2 use the original 16-bit **Stat EXP** system rather than the modern 0-252 EV system. GameShark exposes the five stored values:
+
 - HP
 - Attack
 - Defense
 - Speed
 - Special
 
-The editor labels these values as EVs for familiarity, but edits the authentic
-Stat EXP fields used by the games.
+Each can range from `0` to `65535` (`FFFF` in hexadecimal).
 
-Each EV opens a four-digit hexadecimal editor:
-- `0000` = 0
-- `FFFF` = 65,535
-- **A** increases the selected hex digit
-- **SELECT** decreases the selected hex digit
-- **APPLY** writes the exact 16-bit value
+Convenience options include:
 
-Convenience actions:
-- **MAX ALL EVS** = 65,535 in every Stat EXP field
-- **ZERO ALL EVS** = 0 in every Stat EXP field
+- **MAX ALL EVS**
+- **ZERO ALL EVS**
+- **RECALC STATS**
 
-After an edit GameShark immediately recalculates the Pokemon's actual stats.
-For Gen 2, DV changes also refresh gender and shiny state because both are
-derived from DVs.
+The editor also displays **RESULT STATS** so the effective calculated stats can be checked immediately.
 
-### Independence / attribution
+## Crystal Celebi / GS Ball event — v0.7.8
 
-This editor was implemented against Gen1Recomp's own documented/runtime
-Pokemon structures and stat formulas. It does not include, copy, or require
-FAFF0x's DV/EV editor code.
+Version **0.7.8** adds a Crystal-only **CELEBI EVENT** action.
 
+It mirrors the classic Crystal GameShark GS Ball event activation (`010B3CBE`) by setting the corresponding Crystal event state through Gen1Recomp's save representation.
 
-## v0.7.6 — Teleport UI + DV/EV stat refresh fixes
+The row appears only when the active Gen 2 game exposes Crystal's `GS_BALL` item/event capability. It is intentionally hidden in Gold and Silver because those games do not contain Crystal's localized GS Ball/Celebi event sequence.
 
-### Gold Teleport menu
-Gold could complete the warp while the GameShark ListMenu was still on the UI
-stack, leaving the menu visible after arrival. Teleport is now deferred until
-the frame after the Teleport screen closes.
+After activating the event in Crystal, continue through the game's normal event flow beginning around the Goldenrod City Pokemon Center, followed by Kurt and the Ilex Forest shrine sequence.
 
-### DV/EV editor
-The editor now recalculates through the same native engine code used by the
-games themselves:
-
-- Gen 1: `src.pokemon.Stats.calc`
-- Gen 2: `src.battle.gen2.Mon.refreshStats`
-
-The editor now reads the species definition from `game.data.pokemon`, matching
-the native Summary screens, rather than relying on a merged registry record for
-stat calculation.
-
-This fixes the case where the editor showed DVs/Stat EXP as changed while the
-Pokemon's displayed battle stats remained at their old values.
-
-Opening a Pokemon in the editor now recalculates it immediately, so values
-already changed with v0.7.0 can be repaired without re-entering every number.
-A **RECALC STATS** action is also available explicitly.
-
-
-## v0.7.6 — Teleport menu-stack fix
-
-Teleport now clears the complete menu overlay stack immediately before the
-warp. This matters when GameShark was opened through nested START / MODS
-screens: closing only the Teleport list left those underlying menus visible
-after arriving in Gold.
-
-The DV/EV implementation is unchanged from v0.7.1. A verification note for
-Gen 1: "EV" in this editor means the original games' 16-bit Stat EXP. A value
-of 65,535 is fed through the original stat formula; it is not added directly
-to the visible stat. For example, a level-20 Mew with 15 DVs and 65,535 Stat
-EXP has 88 HP and 63 in Attack, Defense, Speed and Special.
-
-
-## v0.7.6 — Gen 1 Teleport regression fix + stat preview
-
-### Teleport
-
-v0.7.2 fixed Gold's leftover menus by clearing the complete state stack before
-warping. That is correct for Gen 2, but incorrect for Gen 1 because the Gen-1
-stack also contains the active overworld state.
-
-v0.7.6 now uses generation-specific behavior:
-
-- **Red / Blue / Yellow:** close the Teleport menu and warp, preserving the
-  live overworld state.
-- **Gold / Silver:** clear the nested UI overlay stack before the warp so no
-  menus remain after arrival.
-
-### DV / EV editor verification
-
-The editor now displays a **RESULT STATS** section beneath the DV / Stat EXP
-values. This shows the actual HP/Attack/Defense/Speed/Special values currently
-calculated from the edited data.
-
-Gen 1 reminder: the game's so-called EVs are 16-bit Stat EXP values. `65535`
-does not become a +65535 visible stat; the original formula takes the square
-root and divides the result before applying level scaling.
-
-Example from the v0.7.2 test video:
-- Level 4 Weedle before the shown edits, using DVs 0/9/10/3 and zero Stat EXP:
-  approximately HP 17, ATK 7, DEF 8, SPD 9, SPC 6.
-- With all DVs 15 and all Stat EXP 65535:
-  HP 20, ATK 11, DEF 11, SPD 12, SPC 10.
-
-Those latter values are exactly what the Blue summary displayed in the test
-video, confirming the Gen-1 stat calculation was being applied. The new
-RESULT STATS section makes that visible before leaving GameShark.
-
-
-## v0.7.6 — Give Item + Gen 1 Wild-menu spacing
-
-### Give Item
-
-The main GameShark menu now includes:
+The menu can report the event state as it progresses, such as:
 
 ```text
-GIVE ITEM   >
+START
+READY
+GIVEN
+USED
 ```
 
-Choose an item from the active game's own item catalog, then choose how many
-to add.
+For a direct Celebi encounter in Gold or Silver, use the Wild Pokemon / Instant Battle tools instead of the Crystal-only event flag.
 
-- Stackable items: choose **1 through 99** to add.
-- Existing stacks are increased and capped at the games' normal 99-item stack
-  maximum.
-- Gen 2 KEY ITEMS and HMs are treated as unique and add one copy.
-- The item is inserted into the bag's acquisition order so it appears in the
-  normal inventory UI immediately.
-- Gen 2 items automatically appear in their native ITEMS / POKé BALLS /
-  KEY ITEMS / TM-HM pocket because the current game's item definition supplies
-  the pocket.
+## Gen 2 / Silver / Crystal compatibility cleanup — v0.7.7
 
-Supported games:
-- Pokemon Red
-- Pokemon Blue
-- Pokemon Yellow
-- Pokemon Gold
-- Pokemon Silver
+Version **0.7.7** removed old hard-coded checks for `version == "gold"`.
 
-The picker is generated from `game.data.items`, so each game gets the item
-definitions decoded for that game rather than a hard-coded cross-generation
-list.
+Gen 2 behavior now keys off generation/capability instead, allowing the same supported code paths to cover:
 
-### Wild Pokemon spacing
+- Gold
+- Silver
+- Crystal
 
-The narrow Gen-1 main menu could not fit `WILD POKEMON` and `OFF >` in separate
-columns. The main-menu row is now:
+This change also removes the `MK409` warnings that the strict Gen 2 modkit check reported for version-specific allow-list logic.
+
+The current compatibility design is:
 
 ```text
-WILD PKMN      OFF >
+Gen 1 → Red / Blue / Yellow
+Gen 2 → Gold / Silver / Crystal
 ```
 
-The actual setup screen still uses the full title:
+`mod.exports.game()` also reports the actual running game version instead of identifying every Gen 2 game as Gold.
+
+## Validation
+
+GameShark is designed to pass the current Gen1Recomp mod checks, including the sandbox rules introduced for Mod API 2.
+
+Typical checks from the Gen1Recomp source tree are:
+
+```bash
+python3 tools/modkit.py validate GameShark --strict
+python3 tools/modkit.py lint GameShark
+python3 tools/modkit.py gen2check GameShark --strict --notes
+```
+
+The mod does not use prohibited unrestricted filesystem/process APIs such as `io`, `os.getenv`, `os.execute`, `love.filesystem`, `dofile`, `loadfile`, or `debug`.
+
+## Updating through Gen1Recomp
+
+The manifest contains:
+
+```json
+"github": "goofwear/gameshark"
+```
+
+Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and **Versions** support when releases contain an installable ZIP.
+
+For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-WILD POKEMON
+GameShark-0.7.8.zip
 ```
 
-No Wild Pokemon functionality changed.
+## Development notes
 
+GameShark translates GameShark-style effects into Gen1Recomp's supported runtime/save APIs. It does not emulate a physical GameShark device or blindly write raw Game Boy memory for every feature.
 
-## v0.7.6 — Gold Give Item crash fix
+Some original GameShark codes are retained as historical/reference identifiers inside the source, while the actual implementation uses generation-aware engine behavior where needed for stability.
 
-Gold could crash immediately after selecting **GIVE ITEM**, before the item
-list appeared. The picker was iterating every entry exposed by the Gen-2 item
-data and its final sort compared raw table keys. A heterogeneous auxiliary key
-could therefore reach a Lua `<` comparison against a symbolic string item ID.
-
-v0.7.6 hardens the picker:
-
-- Only canonical symbolic string IDs with table item definitions are listed.
-- Item names must be real strings.
-- Sentinel / badge entries are excluded.
-- All fallback ID comparisons use `tostring()`.
-- The selection callback validates the row before opening the quantity screen.
-
-Blue's already-working Give Item path is otherwise unchanged.
-
-
-## v0.7.6 — Unrestricted Teach Move
-
-The main GameShark menu now includes:
-
-```text
-TEACH MOVE   >
-```
-
-Workflow:
-
-```text
-TEACH MOVE
-→ choose a Pokemon from the party
-→ choose any move from the current game's complete move catalog
-→ free move slot: move is learned immediately
-→ four occupied slots: choose SLOT 1-4 to overwrite
-```
-
-### No learnset restrictions
-
-This is intentionally a GameShark/debug feature. It does **not** check whether
-the selected Pokemon can normally learn the move by level-up, TM, HM, tutor,
-egg move, or any other legal method.
-
-Examples that are allowed:
-- Magikarp with FLY
-- Pikachu with SURF
-- any Pokemon with an HM it could not normally learn
-- replacing an existing HM move directly
-
-### Move data / PP
-
-The move picker is generated from the active game's own `game.data.moves`
-records rather than a hard-coded cross-generation list.
-
-A newly taught move starts at full base PP:
-- Gen 1 stores `id` + current PP.
-- Gen 2 stores `id` + current PP + `maxPp`.
-
-Replacing a move starts the new move fresh; PP Ups from the overwritten move
-are **not** transferred to the new move.
-
-Selecting a move the Pokemon already knows does not create a duplicate slot;
-instead, that move's PP is restored.
-
-### Compatibility
-
-Designed for:
-- Pokemon Red
-- Pokemon Blue
-- Pokemon Yellow
-- Pokemon Gold
-- Pokemon Silver
-
-The implementation uses the same plain party move records that Gen1Recomp's
-own save editor and Gen-2 move-learning code use. It does not depend on another
-move-manager mod.
-
-
-## v0.7.7 — Silver/Crystal targeting + modkit cleanup + Wild row alignment
-
-### Gen 2 targeting
-
-GameShark now treats Gen 2 by capability/generation instead of checking for the
-literal `gold` version string. This removes the two `MK409` version allow-list
-warnings reported by `modkit.py gen2check --strict` and lets the same Gen 2
-paths serve **Gold, Silver, and Crystal**.
-
-The manifest continues to declare `games: ["gen1", "gen2"]`, which current
-Gen1Recomp resolves to Red, Blue, Yellow, Gold, Silver, and Crystal.
-
-### Wild Pokemon row spacing
-
-The narrow main menu now renders the row as:
-
-```text
-WILD PKMN >          OFF
-```
-
-`ON` / `OFF` is now the same right-aligned field used by every other cheat.
-The submenu itself still uses the full **WILD POKEMON** title.
-
-### Validation
-
-This release was prepared specifically to satisfy the current modkit checks,
-including removal of the Gen-2 strict-check warnings caused by hard-coded Gold
-version tests.
+For the complete version-by-version history, see [`CHANGELOG.md`](CHANGELOG.md).

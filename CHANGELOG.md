@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.8] - 2026-09-02
+
+### Added
+- Added **CELEBI EVENT** for Pokemon Crystal.
+- Mirrors the original `010B3CBE` GS Ball event activation by setting Crystal's
+  native `sGSBallFlag` representation to the available state.
+- Uses capability detection (`GS_BALL` in the active game's item data), so the
+  action appears only where the original event actually exists.
+
+### Compatibility
+- Gold and Silver remain supported by the rest of GameShark, but do not expose
+  the Crystal-only GS Ball event action because their original games do not
+  contain that event.
+
+
 ## [0.7.7] - 2026-08-24
 
 ### Fixed
