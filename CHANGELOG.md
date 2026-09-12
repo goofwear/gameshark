@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.9] - 2026-09-12
+
+### Added
+- Added **FRIENDSHIP** editor.
+- Gold, Silver and Crystal: choose any non-Egg party Pokemon and set friendship
+  directly to **255 (MAX)** or **0 (ZERO)**.
+- Pokemon Yellow: edits the original starter Pikachu friendship byte through
+  `save.pikachuHappiness`, with MAX and ZERO options.
+- Displays the current friendship value in the Pokemon picker and action menu.
+- Eggs are protected from friendship editing because Gen 2 uses their separate
+  hatch-step state instead.
+
+### Compatibility
+- Friendship is detected by capability/generation:
+  - Gen 2 uses each party Pokemon's `happiness` field.
+  - Yellow uses the presence of `save.pikachuHappiness`.
+  - Red and Blue do not show the Friendship menu.
+- No hard-coded Gold/Silver/Crystal allow-list was added, preserving strict
+  Gen 2 lint compatibility.
+
+
 ## [0.7.8] - 2026-09-02
 
 ### Added

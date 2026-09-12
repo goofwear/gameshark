@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.7.8
+# GameShark Compatibility v0.7.9
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -37,7 +37,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.7.8.zip
+GameShark-0.7.9.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -176,6 +176,45 @@ Convenience options include:
 
 The editor also displays **RESULT STATS** so the effective calculated stats can be checked immediately.
 
+
+## Friendship editor — v0.7.9
+
+Version **0.7.9** adds a **FRIENDSHIP** editor.
+
+### Gold / Silver / Crystal
+
+Every non-Egg party Pokemon can be selected individually. The menu shows its
+current friendship value and provides:
+
+- **MAX FRIENDSHIP — 255**
+- **ZERO FRIENDSHIP — 0**
+
+This is useful for friendship evolutions and for immediately testing the Gen 2
+moves **Return** and **Frustration** at opposite ends of the friendship scale.
+
+Eggs are shown but cannot be edited because Gen1Recomp keeps their hatch
+counter separate from normal Pokemon friendship.
+
+### Pokemon Yellow
+
+Yellow uses its original starter-Pikachu-only friendship system rather than
+the per-Pokemon Gen 2 system. When the active save exposes Yellow's
+`pikachuHappiness` capability, GameShark shows the same **FRIENDSHIP** menu for
+Pikachu and lets you set it to 255 or 0.
+
+Pikachu's separate mood byte is intentionally left alone. The original Yellow
+engine combines friendship and mood when choosing Pikachu's reaction, so this
+cheat changes friendship without overwriting temporary/scripted moods.
+
+### Red / Blue
+
+The friendship menu is hidden because Red and Blue do not have a corresponding
+friendship value.
+
+The implementation is capability/generation based rather than a hard-coded
+game-version allow-list, keeping it compatible with the Gen1Recomp mod lint and
+Gen 2 compatibility checks.
+
 ## Crystal Celebi / GS Ball event — v0.7.8
 
 Version **0.7.8** adds a Crystal-only **CELEBI EVENT** action.
@@ -245,7 +284,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.7.8.zip
+GameShark-0.7.9.zip
 ```
 
 ## Development notes

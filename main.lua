@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.8
+-- GameShark Compatibility 0.7.9
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -17,6 +17,8 @@ local ITEM_QTY_SCREEN = "GameSharkItemQty"
 local MOVE_PARTY_SCREEN = "GameSharkMoveParty"
 local MOVE_PICK_SCREEN = "GameSharkMovePick"
 local MOVE_SLOT_SCREEN = "GameSharkMoveSlot"
+local FRIENDSHIP_SCREEN = "GameSharkFriendship"
+local FRIENDSHIP_ACTION_SCREEN = "GameSharkFriendshipAction"
 
 local GENDER_CHOICES = { "random", "male", "female" }
 local SHINY_CHOICES = { "random", "yes", "no" }
@@ -91,6 +93,13 @@ return function(mod)
     movePartyIndex = 1, movePartyScroll = 0,
     movePickIndex = 1, movePickScroll = 0,
     moveSlotIndex = 1, moveSlotScroll = 0,
+    friendshipIndex = 1, friendshipScroll = 0,
+    friendshipActionIndex = 1, friendshipActionScroll = 0,
+  }
+
+  local friendshipEditor = {
+    partySlot = nil,
+    yellowPikachu = false,
   }
 
   local moveEditor = {
@@ -182,6 +191,62 @@ return function(mod)
     if v=="given" then return "GIVEN" end
     if v=="used" then return "USED" end
     return "START"
+  end
+
+  -- Friendship support is capability-based rather than version allow-listed.
+  -- Every Gen 2 party mon carries `happiness`; Yellow alone carries the
+  -- starter Pikachu byte on save.pikachuHappiness. Red/Blue have neither.
+  local function hasFriendshipFeature(game)
+    local save=game and game.save
+    if not save then return false end
+    if save.generation==2 then return true end
+    return save.pikachuHappiness ~= nil
+  end
+
+  local function isYellowFriendship(game)
+    local save=game and game.save
+    return save and save.generation~=2 and save.pikachuHappiness ~= nil or false
+  end
+
+  local function friendshipValue(game,mon)
+    local save=game and game.save
+    if not save then return nil end
+    if isYellowFriendship(game) then
+      return math.max(0,math.min(255,math.floor(tonumber(save.pikachuHappiness) or 90)))
+    end
+    if save.generation==2 and type(mon)=="table" and mon.isEgg~=true then
+      return math.max(0,math.min(255,math.floor(tonumber(mon.happiness) or 70)))
+    end
+    return nil
+  end
+
+  local function setFriendship(game,mon,value)
+    local save=game and game.save
+    if not save then return false,"save unavailable" end
+    value=math.max(0,math.min(255,math.floor(tonumber(value) or 0)))
+
+    if isYellowFriendship(game) then
+      -- Yellow stores friendship once for the starter Pikachu, not on each
+      -- party mon. Keep mood separate; the original game also treats it as a
+      -- different byte and chooses reactions from both values.
+      save.pikachuHappiness=value
+      return true,value
+    end
+
+    if save.generation==2 then
+      if type(mon)~="table" then return false,"Pokemon unavailable" end
+      if mon.isEgg==true then return false,"Eggs do not use friendship" end
+      mon.happiness=value
+      return true,value
+    end
+    return false,"friendship unsupported"
+  end
+
+  local function friendshipTarget(game)
+    if isYellowFriendship(game) then return nil end
+    local party=game and game.save and game.save.party
+    local slot=friendshipEditor.partySlot
+    return party and slot and party[slot] or nil
   end
 
   local function ensureItem(save,id,qty)
@@ -1871,6 +1936,119 @@ return function(mod)
     return menu
   end})
 
+  mod.content.screens:register(FRIENDSHIP_ACTION_SCREEN,{new=function(game)
+    local mon=friendshipTarget(game)
+    local current=friendshipValue(game,mon)
+    local name="PIKACHU"
+
+    if not isYellowFriendship(game) and mon then
+      local def=editorSpeciesDef(mon,game)
+      name=(mon.nickname and mon.nickname~="" and mon.nickname)
+        or (def and def.name) or mon.species or "POKEMON"
+    end
+
+    local items={
+      {label="CURRENT",right=tostring(current or "N/A"),kind="readonly"},
+      {label="MAX FRIENDSHIP",right="255",kind="max"},
+      {label="ZERO FRIENDSHIP",right="0",kind="zero"},
+      {label="BACK",kind="back"},
+    }
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,name,items,{
+      onChoose=function(item,currentMenu)
+        if not item then return end
+        uiPos.friendshipActionIndex=currentMenu.index or uiPos.friendshipActionIndex
+        uiPos.friendshipActionScroll=currentMenu.scroll or uiPos.friendshipActionScroll
+
+        if item.kind=="max" then
+          setFriendship(game,mon,255)
+          currentMenu:close()
+          mod.ui.push(game,FRIENDSHIP_ACTION_SCREEN)
+          return
+        end
+        if item.kind=="zero" then
+          setFriendship(game,mon,0)
+          currentMenu:close()
+          mod.ui.push(game,FRIENDSHIP_ACTION_SCREEN)
+          return
+        end
+        if item.kind=="back" then
+          currentMenu:close()
+          mod.ui.push(game,FRIENDSHIP_SCREEN)
+          return
+        end
+      end,
+      onCancel=function() mod.ui.push(game,FRIENDSHIP_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(uiPos.friendshipActionIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.friendshipActionScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(FRIENDSHIP_SCREEN,{new=function(game)
+    local save=game and game.save
+    local items={}
+
+    if isYellowFriendship(game) then
+      local pika=nil
+      for _,mon in ipairs((save and save.party) or {}) do
+        if mon.species=="PIKACHU" then pika=mon break end
+      end
+      local def=pika and editorSpeciesDef(pika,game) or nil
+      local name=(pika and pika.nickname and pika.nickname~="" and pika.nickname)
+        or (def and def.name) or "PIKACHU"
+      items[#items+1]={
+        label=name,
+        right=tostring(friendshipValue(game,nil) or 90),
+        kind="starter_pika",
+      }
+    else
+      for i,mon in ipairs((save and save.party) or {}) do
+        local def=editorSpeciesDef(mon,game)
+        local name=(mon.nickname and mon.nickname~="" and mon.nickname)
+          or (def and def.name) or mon.species or ("SLOT "..i)
+        local isEgg=mon.isEgg==true
+        items[#items+1]={
+          label=tostring(i)..". "..name,
+          right=isEgg and "EGG" or tostring(friendshipValue(game,mon) or 70),
+          slot=i,
+          disabledEgg=isEgg,
+        }
+      end
+    end
+
+    items[#items+1]={label="BACK",kind="back"}
+
+    local menu
+    menu=mod.ui.ListMenu.new(game,"FRIENDSHIP",items,{
+      pageJump=true,
+      onChoose=function(item,current)
+        if not item then return end
+        uiPos.friendshipIndex=current.index or uiPos.friendshipIndex
+        uiPos.friendshipScroll=current.scroll or uiPos.friendshipScroll
+
+        if item.kind=="back" then
+          current:close()
+          mod.ui.push(game,MAIN_SCREEN)
+          return
+        end
+        if item.disabledEgg then
+          return
+        end
+
+        friendshipEditor.partySlot=item.slot
+        friendshipEditor.yellowPikachu=(item.kind=="starter_pika")
+        current:close()
+        mod.ui.push(game,FRIENDSHIP_ACTION_SCREEN)
+      end,
+      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(uiPos.friendshipIndex,#items))
+    menu.scroll=math.max(0,math.min(uiPos.friendshipScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
   mod.content.screens:register(PARTY_EDIT_SCREEN,{new=function(game)
     local party=game and game.save and game.save.party or {}
     local items={}
@@ -2138,6 +2316,9 @@ return function(mod)
         kind="celebi_event"
       }
     end
+    if hasFriendshipFeature(game) then
+      items[#items+1]={label="FRIENDSHIP",right=">",kind="friendship"}
+    end
     items[#items+1]={label="TEACH MOVE",right=">",kind="teach_move"}
     items[#items+1]={label="GIVE ITEM",right=">",kind="give_item"}
     items[#items+1]={label="TELEPORT",right=">",kind="teleport"}
@@ -2159,6 +2340,11 @@ return function(mod)
         enableCelebiEvent(game)
         current:close()
         mod.ui.push(game,MAIN_SCREEN)
+        return
+      end
+      if item.kind=="friendship" then
+        current:close()
+        mod.ui.push(game,FRIENDSHIP_SCREEN)
         return
       end
       if item.kind=="teach_move" then
@@ -2194,6 +2380,9 @@ return function(mod)
     return menu
   end})
 
+  mod.exports.hasFriendship=function(game) return hasFriendshipFeature(game or mod.game) end
+  mod.exports.getFriendship=function(mon,game) return friendshipValue(game or mod.game,mon) end
+  mod.exports.setFriendship=function(mon,value,game) return setFriendship(game or mod.game,mon,value) end
   mod.exports.hasCelebiEvent=function(game) return hasCrystalGsBallEvent(game or mod.game) end
   mod.exports.enableCelebiEvent=function(game) return enableCelebiEvent(game or mod.game) end
   mod.exports.moveRows=function(mon,game) return moveRows(game or mod.game,mon) end
