@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.7.9
+# GameShark Compatibility v0.7.10
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -37,7 +37,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.7.9.zip
+GameShark-0.7.10.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -177,6 +177,30 @@ Convenience options include:
 The editor also displays **RESULT STATS** so the effective calculated stats can be checked immediately.
 
 
+
+## Red Safari / trainer-catch fixes — v0.7.10
+
+Version **0.7.10** fixes three Gen 1 compatibility problems reported on
+Pokemon Red:
+
+- **Safari Ball** now refills the active Safari Game counter after the engine
+  processes a ball throw, so the displayed/usable count remains full.
+- **Safari Time** now refills after the engine processes a player step, so Red
+  no longer visibly counts down while the cheat is enabled.
+- **Steal Trainer** now installs from the engine's `battle.started` event in
+  addition to the compatibility stack scan. This makes the cheat independent
+  of the exact battle-screen stack layout and restores the Red path used by
+  current Gen1Recomp builds/forks.
+
+The Gen 1 trainer-catch path still performs a guaranteed normal capture, stores
+the caught Pokemon through Gen1Recomp's stock catch routine, then finishes the
+trainer encounter with a **win** result so the same NPC does not immediately
+restart the battle.
+
+These changes apply to the shared Gen 1 path used by **Red, Blue, and Yellow**.
+Gold, Silver, and Crystal keep their existing Gen 2 trainer-catch
+implementation.
+
 ## Friendship editor — v0.7.9
 
 Version **0.7.9** adds a **FRIENDSHIP** editor.
@@ -284,7 +308,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.7.9.zip
+GameShark-0.7.10.zip
 ```
 
 ## Development notes

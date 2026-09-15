@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.10] - 2026-09-15
+
+### Fixed
+- Fixed **Safari Ball** on Gen 1 by refilling the active Safari counter after
+  each engine update/ball throw.
+- Fixed **Safari Time** on Gen 1 by refilling the step counter after movement;
+  Red no longer visibly counts down while the cheat is enabled.
+- Fixed **Steal Trainer** on Pokemon Red by installing the Gen 1 trainer-catch
+  wrapper directly from `battle.started`, rather than depending only on a
+  particular `game.stack.states` layout.
+- Trainer catches explicitly preserve `afterQueue = "finish"` and resolve with
+  a **win** result after the caught Pokemon is stored, preventing the trainer
+  NPC from immediately re-engaging.
+
+### Compatibility
+- Safari fixes use the shared Gen 1 save structure and therefore cover Red,
+  Blue and Yellow.
+- Gold, Silver and Crystal continue to use the existing Gen 2 trainer-catch
+  path.
+
+
 ## [0.7.9] - 2026-09-12
 
 ### Added

@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.7.9
+-- GameShark Compatibility 0.7.10
 -- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -596,6 +596,7 @@ return function(mod)
       if self._gamesharkStealActive then
         self.kind=self._gamesharkOriginalKind or "trainer"
         self.result="win"
+        self.afterQueue="finish"
         self._gamesharkStealActive=nil
         if type(self.playVictoryMusic)=="function" then self:playVictoryMusic() end
       end
@@ -1177,7 +1178,10 @@ return function(mod)
       end
       if not isGen2(game) and save.safari then
         if enabled("safari_balls") then save.safari.balls=99 end
-        if enabled("safari_time") then save.safari.steps=240 end
+        -- Gen 1 starts the Safari Game at 502 internally and reaches 500
+        -- after the two gate steps.  Keep a generous full-session value here
+        -- before the engine advances so the game-over branch can never fire.
+        if enabled("safari_time") then save.safari.steps=500 end
       end
     end
     if isGen2(game) then
@@ -1190,6 +1194,21 @@ return function(mod)
     if enabled("enemy_burn") then burnEnemy(game) end
 
     local result=next(game,dt)
+
+    -- Re-apply Safari cheats AFTER the engine update too.  A completed player
+    -- step decrements save.safari.steps and a thrown Safari Ball decrements
+    -- save.safari.balls during next(game,dt).  Refilling only before `next`
+    -- made Red visibly count down and could make the cheats appear broken on
+    -- builds that render the post-step value.  The post-update write keeps the
+    -- counters stable for Red, Blue and Yellow.
+    do
+      local postSave=game and game.save
+      local safari=postSave and postSave.safari
+      if safari and not isGen2(game) then
+        if enabled("safari_balls") then safari.balls=99 end
+        if enabled("safari_time") then safari.steps=500 end
+      end
+    end
 
     if pendingTeleport then
       if pendingTeleportFrames>0 then
@@ -1340,13 +1359,29 @@ return function(mod)
     end
   end)
 
-  -- Finalize the actual constructed Gold wild Pokemon after Mon.new has
-  -- finished. This keeps its stored shiny/gender and DVs in agreement.
+  -- battle.started is the authoritative live-battle entry point.  Do not
+  -- rely only on scanning game.stack.states: some Gen1Recomp builds/forks
+  -- expose the Red battle screen through a different stack shape even though
+  -- the battle event still carries the real BattleState.
   mod.events:on("battle.started", function(ev)
-    if not ev or ev.kind~="wild" then return end
-    local battle=ev.battle
-    local mon=battle and battle.enemy
-    if mon then applyPendingWildIdentity(mon) end
+    if not ev then return end
+
+    if ev.kind=="wild" then
+      -- Finalize the actual constructed Gold wild Pokemon after Mon.new has
+      -- finished. This keeps its stored shiny/gender and DVs in agreement.
+      local battle=ev.battle
+      local mon=battle and battle.enemy
+      if mon then applyPendingWildIdentity(mon) end
+      return
+    end
+
+    -- Install the Gen 1 steal-trainer wrapper immediately when the trainer
+    -- battle starts.  This fixes Red builds where the later stack scan never
+    -- discovers the live BattleState.  Gen 2 keeps its separate screen/model
+    -- path below.
+    if ev.kind=="trainer" and enabled("steal_trainer") and not isGen2(mod.game) then
+      patchGen1Trainer(ev.battle)
+    end
   end)
 
   -- Gen2 Pay Day compatibility for Gen1Recomp builds where EFFECT_PAY_DAY is
