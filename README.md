@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.8.3
+# GameShark Compatibility v0.8.4
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -8,6 +8,29 @@ GameShark Compatibility is a standalone GameShark-style cheat and debug menu for
 
 
 
+
+
+
+## FireRed activation fix — v0.8.4
+
+The v0.8.3 native stack change still allowed one legacy UI call to happen too
+early: each registered GameShark screen factory calls `mod.ui.ListMenu.new()`
+while it is being constructed. FireRed's START menu protects custom `onSelect`
+callbacks with `pcall`, so that constructor error was swallowed by the menu
+system and the visible symptom was simply **press A and nothing happens**.
+
+v0.8.4 does not construct a Gen 1/2 ListMenu on FireRed at all. It temporarily
+uses a small capture constructor to collect the GameShark screen's title, rows,
+callbacks, cursor and scrolling options. Those captured definitions are then
+hosted by FireRed's native `src.ui.game3.stack`, `window`, and `frlg_font`
+modules.
+
+This keeps the existing GameShark screen logic as GameShark's own code while
+using the same supported FireRed UI architecture demonstrated by working
+FireRed-native mods.
+
+Because the FireRed path directly requires engine Game3 UI modules, the
+manifest now honestly declares the `engine_internals` permission.
 
 ## FireRed START-menu fix — v0.8.3
 
@@ -75,7 +98,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.8.3.zip
+GameShark-0.8.4.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -346,7 +369,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.8.3.zip
+GameShark-0.8.4.zip
 ```
 
 ## Development notes

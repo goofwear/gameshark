@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.4] - 2026-09-20
+
+### Fixed
+- Fixed the remaining FireRed **GAMESHARK → A does nothing** problem.
+- FireRed no longer invokes the Gen 1/2 `mod.ui.ListMenu.new()` constructor
+  while building GameShark screens.
+- Added a capture adapter that reuses GameShark's own screen definitions and
+  callbacks while presenting them through the native FireRed/Game3 modal UI.
+- Added error logging if a FireRed GameShark screen factory itself fails.
+
+### Manifest
+- Declared `engine_internals`, because the FireRed UI adapter directly requires
+  current Gen1Recomp Game3 UI modules.
+
+
 ## [0.8.3] - 2026-09-20
 
 ### Fixed

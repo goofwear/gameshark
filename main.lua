@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.8.3
+-- GameShark Compatibility 0.8.4
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -1222,7 +1222,53 @@ return function(mod)
       return nil
     end
 
-    local inst=factory.new(game,...)
+    -- IMPORTANT: do NOT construct a legacy ListMenu on FireRed.
+    --
+    -- The registered GameShark screen factories were originally written for
+    -- Gen 1/2 and call mod.ui.ListMenu.new().  Calling the real constructor
+    -- here is exactly why v0.8.1-v0.8.3 could add a GAMESHARK row but pressing
+    -- A appeared to do nothing: FireRed's start menu wraps onSelect in pcall,
+    -- the legacy constructor throws on the Game3 object, and StartMenu prints
+    -- the error to the log while leaving the menu onscreen.
+    --
+    -- Build the factory against a tiny capture constructor instead.  It keeps
+    -- the existing GameShark screen definitions/handlers, but no legacy UI
+    -- object is ever created.  The captured rows are then rendered/controlled
+    -- by the native Game3 host below.
+    local listApi=mod.ui and mod.ui.ListMenu
+    local realNew=listApi and listApi.new
+    if type(realNew)~="function" then return nil end
+
+    local function captureNew(_game,title,items,opts)
+      opts=opts or {}
+      return {
+        title=title,
+        items=items or {},
+        index=1,
+        scroll=0,
+        rows=8,
+        pageJump=opts.pageJump==true,
+        footer=opts.footer,
+        onChoose=opts.onChoose,
+        onCancel=opts.onCancel,
+        onSelectKey=opts.onSelectKey,
+      }
+    end
+
+    listApi.new=captureNew
+    local packed={pcall(factory.new,game,...)}
+    listApi.new=realNew
+
+    local ok=table.remove(packed,1)
+    if not ok then
+      if mod.log and mod.log.error then
+        mod.log:error("FireRed GameShark screen "..tostring(id)..
+          " failed to build: "..tostring(packed[1]))
+      end
+      return nil
+    end
+
+    local inst=packed[1]
     if type(inst)~="table" then return nil end
 
     -- FireRed does not use Game.stack/StateStack.  Its UI is owned by the
