@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.8.1] - 2026-09-20
+
+### Fixed
+- Fixed FireRed **GAMESHARK** start-menu row doing nothing when A was pressed.
+- Added a Gen 3 modal-stack bridge for GameShark's registered shared UI screens.
+- Adapted shared menu `update`/`draw` methods to FireRed's module-style stack calls.
+- Prevented the underlying FireRed START menu from processing the same input while a GameShark screen is active.
+
+
 ## [0.8.0] - 2026-09-20
 
 ### Added

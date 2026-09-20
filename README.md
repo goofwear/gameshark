@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.8.0
+# GameShark Compatibility v0.8.1
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -37,7 +37,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.8.0.zip
+GameShark-0.8.1.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -308,7 +308,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.8.0.zip
+GameShark-0.8.1.zip
 ```
 
 ## Development notes
@@ -364,3 +364,12 @@ The historical GameShark/Action Replay codes are used as behavior references.
 Inside Gen1Recomp the mod implements the equivalent effects through Mod API 2
 and the Gen 3 compatibility facade, avoiding ROM-revision-specific RAM
 addresses.
+
+## FireRed menu activation fix — v0.8.1
+
+Version **0.8.1** fixes the FireRed **GAMESHARK** start-menu row appearing correctly but doing nothing when **A** was pressed.
+
+FireRed uses Gen1Recomp's Gen 3 modal UI stack while the shared GameShark `ListMenu` screens use the Gen 1/2 StateStack-style screen contract. GameShark now hosts those registered screens through a small Gen 3 compatibility bridge, adapts their method-style `update` and `draw` calls, and prevents the still-open FireRed START menu underneath from consuming the same button edge.
+
+The existing Red/Blue/Yellow and Gold/Silver/Crystal UI paths are unchanged.
+

@@ -1,7 +1,7 @@
 {
   "id": "GameShark",
   "name": "GameShark Compatibility",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
@@ -16,6 +16,6 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat/debug menu for Gen1Recomp Gen 1, Gen 2 and Gen 3 FireRed. v0.8.0 adds FireRed support, Gen 3 IV/EV editing, wild Nature/Max-IV controls, Easy Catch, Complete Dex, Give Item, Teach Move and FireRed teleport destinations.",
+  "description": "Universal GameShark-style cheat/debug menu for Gen1Recomp Gen 1, Gen 2 and FireRed (Gen 3). v0.8.1 fixes FireRed menu activation by bridging shared GameShark screens onto the Gen 3 modal UI stack.",
   "github": "goofwear/gameshark"
 }

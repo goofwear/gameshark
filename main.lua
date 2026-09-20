@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.8.0
+-- GameShark Compatibility 0.8.1
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -1199,13 +1199,90 @@ return function(mod)
   local HEX="0123456789ABCDEF"
   local function hexDigit(v) return HEX:sub((v or 0)+1,(v or 0)+1) end
 
+  -- FireRed (Gen 3) uses src/ui/game3/stack.lua for field menus rather than
+  -- the Gen 1/2 StateStack. The shared mod.ui widgets still use the legacy
+  -- screen contract, so bridge that tiny contract onto FireRed's modal stack.
+  local function gen3UiGame(game)
+    if not isGen3(game) then return game end
+    if rawget(game,"__gamesharkGen3UiProxy") then return game end
+
+    local real=rawget(game,"__gamesharkRealGame") or game
+    local native=real and real.stack
+    if type(native)~="table" or type(native.push)~="function"
+       or type(native.pop)~="function" or type(native.top)~="function" then
+      return game
+    end
+
+    local proxy={__gamesharkGen3UiProxy=true,__gamesharkRealGame=real}
+    setmetatable(proxy,{__index=real,__newindex=real})
+    local owned={}
+    local serial=0
+    local stackBridge={}
+
+    function stackBridge:push(inst)
+      if type(inst)~="table" then return nil end
+      serial=serial+1
+      local sid=tostring(inst.screenId or "screen")
+      local layerId="gameshark:"..sid..":"..tostring(serial)
+      owned[layerId]=inst
+      local host={}
+      function host.update(dt)
+        if inst.update then return inst:update(dt) end
+      end
+      function host.draw()
+        if inst.draw then return inst:draw() end
+      end
+      function host.handleInput(_input)
+        -- inst:update already consumed the edge at the start of Hud.update.
+        -- Claim the modal input here so the START menu underneath cannot also
+        -- react to the same A/B/D-pad press.
+        return true
+      end
+      native.push(layerId,host,{hideBelow=true})
+      return inst
+    end
+
+    function stackBridge:pop()
+      local top=native.top()
+      if top and owned[top.id] then
+        owned[top.id]=nil
+        return native.pop(top.id)
+      end
+      return false
+    end
+
+    function stackBridge:top()
+      local top=native.top()
+      return top and owned[top.id] or nil
+    end
+
+    function stackBridge:clear()
+      while true do
+        local top=native.top()
+        if not (top and owned[top.id]) then break end
+        owned[top.id]=nil
+        native.pop(top.id)
+      end
+    end
+
+    proxy.stack=stackBridge
+    return proxy
+  end
+
+  local function pushScreen(game,id,...)
+    if isGen3(game) then
+      return mod.ui.push(gen3UiGame(game),id,...)
+    end
+    return mod.ui.push(game,id,...)
+  end
+
   local function openEvEditor(game,key)
     local mon=getPartyMon(game)
     if not mon then return false end
     mon.statExp=mon.statExp or {}
     editor.evKey=key
     editor.hexDigits=hexFromValue(mon.statExp[key] or 0)
-    mod.ui.push(game,EV_HEX_SCREEN)
+    pushScreen(game,EV_HEX_SCREEN)
     return true
   end
 
@@ -1334,7 +1411,7 @@ return function(mod)
 
         local ok=teleportTo(game,row)
         if not ok then
-          mod.ui.push(game,MAIN_SCREEN)
+          pushScreen(game,MAIN_SCREEN)
         end
       end
     end
@@ -1715,7 +1792,7 @@ return function(mod)
         if selectedGenderless() then state.wildGender="random" end
         persist()
         current:close()
-        mod.ui.push(game,WILD_SCREEN)
+        pushScreen(game,WILD_SCREEN)
       end
     })
 
@@ -1744,7 +1821,7 @@ return function(mod)
         state.wildLevel=item.value
         persist()
         current:close()
-        mod.ui.push(game,WILD_SCREEN)
+        pushScreen(game,WILD_SCREEN)
       end
     })
     menu.index=math.max(1,math.min(uiPos.levelIndex,#items))
@@ -1816,19 +1893,19 @@ return function(mod)
         if item.kind=="wild_toggle" then
           setEnabled("wild_pick",not enabled("wild_pick"))
           current:close()
-          mod.ui.push(game,WILD_SCREEN)
+          pushScreen(game,WILD_SCREEN)
           return
         end
 
         if item.kind=="picker" then
           current:close()
-          mod.ui.push(game,PICK_SCREEN)
+          pushScreen(game,PICK_SCREEN)
           return
         end
 
         if item.kind=="level" then
           current:close()
-          mod.ui.push(game,LEVEL_SCREEN)
+          pushScreen(game,LEVEL_SCREEN)
           return
         end
 
@@ -1838,7 +1915,7 @@ return function(mod)
             persist()
           end
           current:close()
-          mod.ui.push(game,WILD_SCREEN)
+          pushScreen(game,WILD_SCREEN)
           return
         end
 
@@ -1846,17 +1923,17 @@ return function(mod)
           state.wildShiny=cycleChoice(state.wildShiny,SHINY_CHOICES)
           persist()
           current:close()
-          mod.ui.push(game,WILD_SCREEN)
+          pushScreen(game,WILD_SCREEN)
           return
         end
 
         if item.kind=="nature" then
           state.wildNature=cycleChoice(state.wildNature,NATURE_CHOICES); persist()
-          current:close(); mod.ui.push(game,WILD_SCREEN); return
+          current:close(); pushScreen(game,WILD_SCREEN); return
         end
         if item.kind=="max_ivs" then
           state.wildMaxIVs=not state.wildMaxIVs; persist()
-          current:close(); mod.ui.push(game,WILD_SCREEN); return
+          current:close(); pushScreen(game,WILD_SCREEN); return
         end
 
         if item.kind=="instant" then
@@ -1865,7 +1942,7 @@ return function(mod)
           -- to the level picker the first time instead.
           if not state.wildLevel then
             current:close()
-            mod.ui.push(game,LEVEL_SCREEN)
+            pushScreen(game,LEVEL_SCREEN)
             return
           end
 
@@ -1874,14 +1951,14 @@ return function(mod)
           if not ok then
             -- A busy world/no healthy party/older engine simply returns to
             -- the setup screen instead of crashing the game.
-            mod.ui.push(game,WILD_SCREEN)
+            pushScreen(game,WILD_SCREEN)
           end
           return
         end
 
         if item.kind=="back" then
           current:close()
-          mod.ui.push(game,MAIN_SCREEN)
+          pushScreen(game,MAIN_SCREEN)
           return
         end
       end
@@ -1923,7 +2000,7 @@ return function(mod)
 
         if item.kind=="cancel" then
           current:close()
-          mod.ui.push(game,MOVE_PICK_SCREEN)
+          pushScreen(game,MOVE_PICK_SCREEN)
           return
         end
 
@@ -1931,9 +2008,9 @@ return function(mod)
           setMoveSlot(game,mon,item.slot,moveEditor.moveId)
         end
         current:close()
-        mod.ui.push(game,MOVE_PARTY_SCREEN)
+        pushScreen(game,MOVE_PARTY_SCREEN)
       end,
-      onCancel=function() mod.ui.push(game,MOVE_PICK_SCREEN) end,
+      onCancel=function() pushScreen(game,MOVE_PICK_SCREEN) end,
       footer="A:REPLACE B:BACK"
     })
     menu.index=math.max(1,math.min(uiPos.moveSlotIndex,#items))
@@ -1974,14 +2051,14 @@ return function(mod)
 
         if ok then
           -- Added to a free slot, or selected a move already known.
-          mod.ui.push(game,MOVE_PARTY_SCREEN)
+          pushScreen(game,MOVE_PARTY_SCREEN)
         elseif reason=="full" then
-          mod.ui.push(game,MOVE_SLOT_SCREEN)
+          pushScreen(game,MOVE_SLOT_SCREEN)
         else
-          mod.ui.push(game,MOVE_PARTY_SCREEN)
+          pushScreen(game,MOVE_PARTY_SCREEN)
         end
       end,
-      onCancel=function() mod.ui.push(game,MOVE_PARTY_SCREEN) end
+      onCancel=function() pushScreen(game,MOVE_PARTY_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.movePickIndex,math.max(1,#items)))
     menu.scroll=math.max(0,math.min(uiPos.movePickScroll,math.max(0,#items-menu.rows)))
@@ -2014,15 +2091,15 @@ return function(mod)
 
         if item.kind=="back" then
           current:close()
-          mod.ui.push(game,MAIN_SCREEN)
+          pushScreen(game,MAIN_SCREEN)
           return
         end
 
         moveEditor.partySlot=item.slot
         current:close()
-        mod.ui.push(game,MOVE_PICK_SCREEN)
+        pushScreen(game,MOVE_PICK_SCREEN)
       end,
-      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+      onCancel=function() pushScreen(game,MAIN_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.movePartyIndex,#items))
     menu.scroll=math.max(0,math.min(uiPos.movePartyScroll,math.max(0,#items-menu.rows)))
@@ -2046,14 +2123,14 @@ return function(mod)
           if not item then return end
           if item.kind=="back" then
             current:close()
-            mod.ui.push(game,ITEM_PICK_SCREEN)
+            pushScreen(game,ITEM_PICK_SCREEN)
             return
           end
           addItemToBag(game,id,1)
           current:close()
-          mod.ui.push(game,MAIN_SCREEN)
+          pushScreen(game,MAIN_SCREEN)
         end,
-        onCancel=function() mod.ui.push(game,ITEM_PICK_SCREEN) end
+        onCancel=function() pushScreen(game,ITEM_PICK_SCREEN) end
       })
     end
 
@@ -2072,9 +2149,9 @@ return function(mod)
         uiPos.itemQtyScroll=current.scroll or uiPos.itemQtyScroll
         addItemToBag(game,id,item.value)
         current:close()
-        mod.ui.push(game,MAIN_SCREEN)
+        pushScreen(game,MAIN_SCREEN)
       end,
-      onCancel=function() mod.ui.push(game,ITEM_PICK_SCREEN) end
+      onCancel=function() pushScreen(game,ITEM_PICK_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.itemQtyIndex,#items))
     menu.scroll=math.max(0,math.min(uiPos.itemQtyScroll,math.max(0,#items-menu.rows)))
@@ -2115,16 +2192,16 @@ return function(mod)
           local row=item.value
         if not (type(row)=="table" and (type(row.id)=="string" or type(row.id)=="number")) then
           current:close()
-          mod.ui.push(game,MAIN_SCREEN)
+          pushScreen(game,MAIN_SCREEN)
           return
         end
         giveItemState.itemId=row.id
         giveItemState.itemName=tostring(row.name or row.id)
         giveItemState.pocket=type(row.pocket)=="string" and row.pocket or "ITEM"
         current:close()
-        mod.ui.push(game,ITEM_QTY_SCREEN)
+        pushScreen(game,ITEM_QTY_SCREEN)
       end,
-      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+      onCancel=function() pushScreen(game,MAIN_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.itemPickIndex,math.max(1,#items)))
     menu.scroll=math.max(0,math.min(uiPos.itemPickScroll,math.max(0,#items-menu.rows)))
@@ -2152,7 +2229,7 @@ return function(mod)
         pendingTeleportFrames=1
         current:close()
       end,
-      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+      onCancel=function() pushScreen(game,MAIN_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.teleportIndex,math.max(1,#items)))
     menu.scroll=math.max(0,math.min(uiPos.teleportScroll,math.max(0,#items-menu.rows)))
@@ -2187,22 +2264,22 @@ return function(mod)
         if item.kind=="max" then
           setFriendship(game,mon,255)
           currentMenu:close()
-          mod.ui.push(game,FRIENDSHIP_ACTION_SCREEN)
+          pushScreen(game,FRIENDSHIP_ACTION_SCREEN)
           return
         end
         if item.kind=="zero" then
           setFriendship(game,mon,0)
           currentMenu:close()
-          mod.ui.push(game,FRIENDSHIP_ACTION_SCREEN)
+          pushScreen(game,FRIENDSHIP_ACTION_SCREEN)
           return
         end
         if item.kind=="back" then
           currentMenu:close()
-          mod.ui.push(game,FRIENDSHIP_SCREEN)
+          pushScreen(game,FRIENDSHIP_SCREEN)
           return
         end
       end,
-      onCancel=function() mod.ui.push(game,FRIENDSHIP_SCREEN) end
+      onCancel=function() pushScreen(game,FRIENDSHIP_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.friendshipActionIndex,#items))
     menu.scroll=math.max(0,math.min(uiPos.friendshipActionScroll,math.max(0,#items-menu.rows)))
@@ -2253,7 +2330,7 @@ return function(mod)
 
         if item.kind=="back" then
           current:close()
-          mod.ui.push(game,MAIN_SCREEN)
+          pushScreen(game,MAIN_SCREEN)
           return
         end
         if item.disabledEgg then
@@ -2263,9 +2340,9 @@ return function(mod)
         friendshipEditor.partySlot=item.slot
         friendshipEditor.yellowPikachu=(item.kind=="starter_pika")
         current:close()
-        mod.ui.push(game,FRIENDSHIP_ACTION_SCREEN)
+        pushScreen(game,FRIENDSHIP_ACTION_SCREEN)
       end,
-      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+      onCancel=function() pushScreen(game,MAIN_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.friendshipIndex,#items))
     menu.scroll=math.max(0,math.min(uiPos.friendshipScroll,math.max(0,#items-menu.rows)))
@@ -2295,9 +2372,9 @@ return function(mod)
         uiPos.partyEditScroll=current.scroll or uiPos.partyEditScroll
         editor.partySlot=item.slot
         current:close()
-        mod.ui.push(game,isGen3(game) and G3_STAT_SCREEN or MON_EDIT_SCREEN)
+        pushScreen(game,isGen3(game) and G3_STAT_SCREEN or MON_EDIT_SCREEN)
       end,
-      onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
+      onCancel=function() pushScreen(game,MAIN_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.partyEditIndex,math.max(1,#items)))
     menu.scroll=math.max(0,math.min(uiPos.partyEditScroll,math.max(0,#items-menu.rows)))
@@ -2325,9 +2402,9 @@ return function(mod)
         if kind=="iv" then mon.ivs=mon.ivs or {}; mon.ivs[key]=item.value
         else mon.evs=mon.evs or {}; mon.evs[key]=item.value end
         refreshEditedMon(game,mon)
-        current:close(); mod.ui.push(game,G3_STAT_SCREEN)
+        current:close(); pushScreen(game,G3_STAT_SCREEN)
       end,
-      onCancel=function() mod.ui.push(game,G3_STAT_SCREEN) end
+      onCancel=function() pushScreen(game,G3_STAT_SCREEN) end
     })
     menu.index=math.max(1,math.min(cur+1,#items)); menu.scroll=math.max(0,math.min(menu.index-1,math.max(0,#items-menu.rows)))
     return menu
@@ -2335,7 +2412,7 @@ return function(mod)
 
   mod.content.screens:register(G3_STAT_SCREEN,{new=function(game)
     local mon=getPartyMon(game)
-    if not mon then return mod.ui.ListMenu.new(game,"IV / EV EDIT",{},{onCancel=function() mod.ui.push(game,PARTY_EDIT_SCREEN) end}) end
+    if not mon then return mod.ui.ListMenu.new(game,"IV / EV EDIT",{},{onCancel=function() pushScreen(game,PARTY_EDIT_SCREEN) end}) end
     mon.ivs=mon.ivs or {}; mon.evs=mon.evs or {}
     local def=editorSpeciesDef(mon,game)
     local name=(mon.nickname and mon.nickname~="" and mon.nickname) or (def and def.name) or mon.name or tostring(mon.species)
@@ -2349,12 +2426,12 @@ return function(mod)
     local menu
     menu=mod.ui.ListMenu.new(game,name,items,{pageJump=true,onChoose=function(item,current)
       if not item then return end
-      if item.kind=="iv" or item.kind=="ev" then editor.g3Kind=item.kind; editor.g3Key=item.key; current:close(); mod.ui.push(game,G3_VALUE_SCREEN); return end
-      if item.kind=="max_iv" then for _,r in ipairs(G3_STATS) do mon.ivs[r.key]=31 end; refreshEditedMon(game,mon); current:close(); mod.ui.push(game,G3_STAT_SCREEN); return end
-      if item.kind=="max_ev" then for _,r in ipairs(G3_STATS) do mon.evs[r.key]=255 end; refreshEditedMon(game,mon); current:close(); mod.ui.push(game,G3_STAT_SCREEN); return end
-      if item.kind=="zero_ev" then for _,r in ipairs(G3_STATS) do mon.evs[r.key]=0 end; refreshEditedMon(game,mon); current:close(); mod.ui.push(game,G3_STAT_SCREEN); return end
-      if item.kind=="back" then current:close(); mod.ui.push(game,PARTY_EDIT_SCREEN); return end
-    end,onCancel=function() mod.ui.push(game,PARTY_EDIT_SCREEN) end})
+      if item.kind=="iv" or item.kind=="ev" then editor.g3Kind=item.kind; editor.g3Key=item.key; current:close(); pushScreen(game,G3_VALUE_SCREEN); return end
+      if item.kind=="max_iv" then for _,r in ipairs(G3_STATS) do mon.ivs[r.key]=31 end; refreshEditedMon(game,mon); current:close(); pushScreen(game,G3_STAT_SCREEN); return end
+      if item.kind=="max_ev" then for _,r in ipairs(G3_STATS) do mon.evs[r.key]=255 end; refreshEditedMon(game,mon); current:close(); pushScreen(game,G3_STAT_SCREEN); return end
+      if item.kind=="zero_ev" then for _,r in ipairs(G3_STATS) do mon.evs[r.key]=0 end; refreshEditedMon(game,mon); current:close(); pushScreen(game,G3_STAT_SCREEN); return end
+      if item.kind=="back" then current:close(); pushScreen(game,PARTY_EDIT_SCREEN); return end
+    end,onCancel=function() pushScreen(game,PARTY_EDIT_SCREEN) end})
     return menu
   end})
 
@@ -2384,9 +2461,9 @@ return function(mod)
         mon.dvs.hp=hpDv(mon.dvs)
         refreshEditedMon(game,mon)
         current:close()
-        mod.ui.push(game,MON_EDIT_SCREEN)
+        pushScreen(game,MON_EDIT_SCREEN)
       end,
-      onCancel=function() mod.ui.push(game,MON_EDIT_SCREEN) end
+      onCancel=function() pushScreen(game,MON_EDIT_SCREEN) end
     })
     menu.index=math.max(1,math.min((cur or 0)+1,#items))
     menu.scroll=math.max(0,math.min(menu.index-1,math.max(0,#items-menu.rows)))
@@ -2411,7 +2488,7 @@ return function(mod)
       uiPos.evHexIndex=current.index or uiPos.evHexIndex
       uiPos.evHexScroll=current.scroll or uiPos.evHexScroll
       current:close()
-      mod.ui.push(game,EV_HEX_SCREEN)
+      pushScreen(game,EV_HEX_SCREEN)
     end
 
     local menu
@@ -2432,11 +2509,11 @@ return function(mod)
             refreshEditedMon(game,mon)
           end
           current:close()
-          mod.ui.push(game,MON_EDIT_SCREEN)
+          pushScreen(game,MON_EDIT_SCREEN)
           return
         end
         current:close()
-        mod.ui.push(game,MON_EDIT_SCREEN)
+        pushScreen(game,MON_EDIT_SCREEN)
       end,
       onSelectKey=function(item,current)
         if item and item.kind=="digit" then
@@ -2445,7 +2522,7 @@ return function(mod)
           reopen(current)
         end
       end,
-      onCancel=function() mod.ui.push(game,MON_EDIT_SCREEN) end,
+      onCancel=function() pushScreen(game,MON_EDIT_SCREEN) end,
       footer="A:+  SELECT:-"
     })
     menu.index=math.max(1,math.min(uiPos.evHexIndex,#items))
@@ -2457,7 +2534,7 @@ return function(mod)
     local mon=getPartyMon(game)
     if not mon then
       return mod.ui.ListMenu.new(game,"DV / EV EDIT",{},{
-        onCancel=function() mod.ui.push(game,PARTY_EDIT_SCREEN) end
+        onCancel=function() pushScreen(game,PARTY_EDIT_SCREEN) end
       })
     end
 
@@ -2523,7 +2600,7 @@ return function(mod)
         if item.kind=="dv" then
           editor.dvKey=item.key
           current:close()
-          mod.ui.push(game,DV_PICK_SCREEN)
+          pushScreen(game,DV_PICK_SCREEN)
           return
         end
         if item.kind=="ev" then
@@ -2536,27 +2613,27 @@ return function(mod)
           mon.dvs.speed=15; mon.dvs.special=15
           mon.dvs.hp=hpDv(mon.dvs)
           refreshEditedMon(game,mon)
-          current:close(); mod.ui.push(game,MON_EDIT_SCREEN); return
+          current:close(); pushScreen(game,MON_EDIT_SCREEN); return
         end
         if item.kind=="max_ev" then
           for _,r in ipairs(EV_KEYS) do mon.statExp[r.key]=65535 end
           refreshEditedMon(game,mon)
-          current:close(); mod.ui.push(game,MON_EDIT_SCREEN); return
+          current:close(); pushScreen(game,MON_EDIT_SCREEN); return
         end
         if item.kind=="zero_ev" then
           for _,r in ipairs(EV_KEYS) do mon.statExp[r.key]=0 end
           refreshEditedMon(game,mon)
-          current:close(); mod.ui.push(game,MON_EDIT_SCREEN); return
+          current:close(); pushScreen(game,MON_EDIT_SCREEN); return
         end
         if item.kind=="recalc" then
           refreshEditedMon(game,mon)
-          current:close(); mod.ui.push(game,MON_EDIT_SCREEN); return
+          current:close(); pushScreen(game,MON_EDIT_SCREEN); return
         end
         if item.kind=="back" then
-          current:close(); mod.ui.push(game,PARTY_EDIT_SCREEN); return
+          current:close(); pushScreen(game,PARTY_EDIT_SCREEN); return
         end
       end,
-      onCancel=function() mod.ui.push(game,PARTY_EDIT_SCREEN) end
+      onCancel=function() pushScreen(game,PARTY_EDIT_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.monEditIndex,#items))
     menu.scroll=math.max(0,math.min(uiPos.monEditScroll,math.max(0,#items-menu.rows)))
@@ -2610,46 +2687,46 @@ return function(mod)
       uiPos.mainScroll=current.scroll or uiPos.mainScroll
       if item.kind=="wild_menu" then
         current:close()
-        mod.ui.push(game,WILD_SCREEN)
+        pushScreen(game,WILD_SCREEN)
         return
       end
       if item.kind=="celebi_event" then
         enableCelebiEvent(game)
         current:close()
-        mod.ui.push(game,MAIN_SCREEN)
+        pushScreen(game,MAIN_SCREEN)
         return
       end
       if item.kind=="friendship" then
         current:close()
-        mod.ui.push(game,FRIENDSHIP_SCREEN)
+        pushScreen(game,FRIENDSHIP_SCREEN)
         return
       end
       if item.kind=="teach_move" then
         current:close()
-        mod.ui.push(game,MOVE_PARTY_SCREEN)
+        pushScreen(game,MOVE_PARTY_SCREEN)
         return
       end
       if item.kind=="give_item" then
         current:close()
-        mod.ui.push(game,ITEM_PICK_SCREEN)
+        pushScreen(game,ITEM_PICK_SCREEN)
         return
       end
       if item.kind=="teleport" then
         current:close()
-        mod.ui.push(game,TELEPORT_SCREEN)
+        pushScreen(game,TELEPORT_SCREEN)
         return
       end
       if item.kind=="party_edit" then
         current:close()
-        mod.ui.push(game,PARTY_EDIT_SCREEN)
+        pushScreen(game,PARTY_EDIT_SCREEN)
         return
       end
       if item.kind=="surfboard" then
-        current:close(); local ok=useSurfboard(game); if not ok then mod.ui.push(game,MAIN_SCREEN) end; return
+        current:close(); local ok=useSurfboard(game); if not ok then pushScreen(game,MAIN_SCREEN) end; return
       end
       setEnabled(item.value,not enabled(item.value))
       current:close()
-      mod.ui.push(game,MAIN_SCREEN)
+      pushScreen(game,MAIN_SCREEN)
       end
     })
     menu.index=math.max(1,math.min(uiPos.mainIndex,#items))
@@ -2677,6 +2754,6 @@ return function(mod)
 
   mod.hooks:wrap("ui.start_menu.items",function(next,game,items)
     local out=next(game,items); if type(out)~="table" then return out end
-    return mod.ui.insertBefore(out,"SAVE",{label="GAMESHARK",onSelect=function() mod.ui.push(game,MAIN_SCREEN) end})
+    return mod.ui.insertBefore(out,"SAVE",{label="GAMESHARK",onSelect=function() pushScreen(game,MAIN_SCREEN) end})
   end)
 end
