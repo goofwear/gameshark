@@ -1,7 +1,7 @@
 {
   "id": "GameShark",
   "name": "GameShark Compatibility",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
@@ -16,7 +16,7 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat and debug menu for Gen1Recomp Gen 1, Gen 2 and FireRed. v0.9.0 completes FireRed Walk Through Walls by adding a full-noclip fallback for blocked map edges after normal connections fail.",
+  "description": "Universal GameShark-style cheat and debug menu for Gen1Recomp Gen 1, Gen 2 and FireRed. v0.9.1 makes FireRed Walk Through Walls true full noclip by forcing native scriptStep movement before ordinary in-map collision.",
   "github": "goofwear/gameshark",
   "permissions": [
     "engine_internals"

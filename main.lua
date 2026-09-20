@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.9.0
+-- GameShark Compatibility 0.9.1
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -1586,23 +1586,60 @@ return function(mod)
     -- and explicitly skips collision. Native connections/warps are attempted
     -- first; if none exists, Walk Through Walls is allowed to cross the map
     -- boundary as a true full-noclip fallback.
-    if type(P.tryMove)=="function" and not P._gamesharkTryMoveWrapped then
-      local originalTryMove=P.tryMove
+    if type(P.tryMove)=="function" and P._gamesharkTryMoveVersion~="0.9.1" then
+      -- Always wrap the currently installed function. This is intentional:
+      -- Gen1Recomp keeps engine modules loaded when a mod ZIP is updated, so an
+      -- older GameShark wrapper can survive a hot reload. A versioned outer
+      -- wrapper guarantees this build's behavior takes precedence immediately.
+      local previousTryMove=P.tryMove
+      local DIR_DELTA={
+        up={0,-1}, down={0,1}, left={-1,0}, right={1,0}
+      }
+
       P.tryMove=function(dir,game,run)
-        local result,reason=originalTryMove(dir,game,run)
-        if enabled("walk") and result=="blocked" then
-          -- If reason == "bounds", the native tryMove path has already tried
-          -- any valid outdoor map connection/warp.  Reaching this point means
-          -- there is no real connection, so this is the final "full noclip"
-          -- fallback that lets the player cross the decorative map edge too.
+        if not enabled("walk") then
+          return previousTryMove(dir,game,run)
+        end
+
+        if P.moving then
+          return previousTryMove(dir,game,run)
+        end
+
+        local d=DIR_DELTA[dir]
+        if not d then
+          return previousTryMove(dir,game,run)
+        end
+
+        local tx=(tonumber(P.cellX) or 0)+d[1]
+        local ty=(tonumber(P.cellY) or 0)+d[2]
+
+        -- FULL NOCLIP for ordinary in-map movement. Do not ask normal
+        -- collision first: some FireRed blockers return special/non-"blocked"
+        -- movement results, which is why v0.8.9/v0.9.0 still felt partial.
+        -- scriptStep is the engine's own forced movement primitive and still
+        -- runs finishStep(), step events, land-on-warps and camera updates.
+        if C.inBounds and C.inBounds(tx,ty) then
           if P.scriptStep and P.scriptStep(dir) then
-            return "step",reason=="bounds" and "gameshark_noclip_bounds"
-              or "gameshark_walk"
+            return "step","gameshark_full_noclip"
           end
+        end
+
+        -- At a real map edge, let FireRed try a legitimate connection first.
+        local result,reason=previousTryMove(dir,game,run)
+        if result=="connection" or result=="door" or result=="exit_door"
+          or result=="stair" or result=="escalator" or result=="arrow_warp" then
+          return result,reason
+        end
+
+        -- No valid connection: force the boundary step too.
+        if P.scriptStep and P.scriptStep(dir) then
+          return "step","gameshark_noclip_bounds"
         end
         return result,reason
       end
+
       P._gamesharkTryMoveWrapped=true
+      P._gamesharkTryMoveVersion="0.9.1"
     end
 
     g3WalkWrapperInstalled=true

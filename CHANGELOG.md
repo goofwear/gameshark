@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.1] - 2026-09-20
+
+### Fixed
+- Reworked FireRed Walk Through Walls into true full noclip.
+- In-map movement now uses native `Player.scriptStep()` before normal collision
+  logic, covering blockers that do not resolve as a simple `"blocked"` result.
+- Real map connections are still attempted first when stepping outside map
+  bounds; failed edges then use the noclip fallback.
+- Added a versioned `Player.tryMove` wrapper so hot-updating GameShark cannot
+  leave an older movement wrapper active in Gen1Recomp's loaded modules.
+
+
 ## [0.9.0] - 2026-09-20
 
 ### Fixed

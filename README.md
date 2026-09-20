@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.9.0
+# GameShark Compatibility v0.9.1
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -16,6 +16,30 @@ GameShark Compatibility is a standalone GameShark-style cheat and debug menu for
 
 
 
+
+
+## FireRed true full noclip — v0.9.1
+
+The latest video showed that some FireRed blockers could still prevent movement
+even after `Collision.canEnter()` and the old `"blocked"` fallback were handled.
+The reason is that not every movement restriction reaches `tryMove()` as the
+same `"blocked"` result.
+
+v0.9.1 changes the FireRed strategy:
+
+- While **WALK THRU WALLS** is ON, an ordinary target cell that is inside the
+  loaded map is moved into directly with FireRed's native `Player.scriptStep()`
+  **before normal collision logic is consulted**.
+- `scriptStep()` still uses FireRed's normal step-completion code, so camera
+  movement, step events and land-on-warp checks still run.
+- At the outer edge of a map, FireRed is allowed to try a legitimate route/map
+  connection first. If no connection succeeds, GameShark uses the same forced
+  step as the full-noclip fallback.
+- The wrapper is versioned so updating the GameShark ZIP without completely
+  restarting Gen1Recomp cannot leave an older GameShark movement wrapper in
+  control.
+
+This is intentionally stronger than the v0.8.8-v0.9.0 implementation.
 
 ## FireRed full noclip — v0.9.0
 
@@ -203,7 +227,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.9.0.zip
+GameShark-0.9.1.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -474,7 +498,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.9.0.zip
+GameShark-0.9.1.zip
 ```
 
 ## Development notes
