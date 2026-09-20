@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.6] - 2026-09-20
+
+### Fixed
+- Fixed FireRed toggles changing only the GameShark menu state.
+- FireRed continuous cheats now write the live `Runtime.getSession()` state.
+- Fixed FireRed Max Money, Max Coins, Master Ball ×99, Rare Candy ×99,
+  PP Up ×99, Infinite HP, Infinite PP, All Badges and Complete Dex.
+- All Badges also sets FireRed badge flags 0x820 through 0x827.
+- Added explicit Game3 battler-side handling for Infinite HP and One Hit KO.
+- FireRed Wild Picker now always carries its selection into the constructed
+  wild battler for identity/stat finalization.
+
+
 ## [0.8.5] - 2026-09-20
 
 ### Fixed

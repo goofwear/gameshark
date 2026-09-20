@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.8.5
+# GameShark Compatibility v0.8.6
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -11,6 +11,27 @@ GameShark Compatibility is a standalone GameShark-style cheat and debug menu for
 
 
 
+
+
+## FireRed cheat execution fix — v0.8.6
+
+v0.8.5 fixed the FireRed menu itself, but many toggles still wrote to
+`game.save`. In FireRed, that is not the live gameplay state. Gen1Recomp's
+Game3 layer keeps the active game in `Runtime.getSession()`.
+
+v0.8.6 moves FireRed continuous effects to the live Runtime session and applies
+them immediately when toggled as well as every FireRed logic tick:
+
+- Max Money / Max Coins
+- Master Ball ×99 / Rare Candy ×99 / PP Up ×99
+- Infinite HP / Infinite PP
+- All Badges, including the eight real FRLG badge script flags
+- Complete Dex
+- Burn Foe
+- explicit FireRed battle-side handling for Infinite HP and One Hit KO
+
+The FireRed Wild Picker also always arms its post-construction finalizer so
+shiny, gender, nature and IV choices can be applied to the actual wild Pokémon.
 
 ## FireRed native menu rewrite — v0.8.5
 
@@ -109,7 +130,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.8.5.zip
+GameShark-0.8.6.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -380,7 +401,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.8.5.zip
+GameShark-0.8.6.zip
 ```
 
 ## Development notes

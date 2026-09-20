@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.8.5
+-- GameShark Compatibility 0.8.6
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -1432,9 +1432,117 @@ return function(mod)
     return rows
   end
 
+  -- FireRed gameplay lives in Runtime.getSession().  Game3.save is a
+  -- persistence snapshot, so continuous cheats must write the live session.
+  local function liveGen3Session()
+    if not isGen3(mod.game) then return nil end
+    local ok,R=pcall(require,"src.core.game3.runtime")
+    if not (ok and R and R.getSession) then return nil end
+    return R.getSession()
+  end
+
+  local function gen3EnsureItem(name,qty)
+    local s=liveGen3Session()
+    if not (s and s.bag) then return false end
+    local Bag=require("src.core.game3.bag")
+    local Items=require("src.core.game3.items_data")
+    local id=Items.toNumericId and Items.toNumericId(name)
+    if not id and Items.BY_HOST and Items.BY_HOST[name] then id=Items.BY_HOST[name].frlg end
+    if not id then return false end
+    Bag.set(s.bag,id,math.max(Bag.get(s.bag,id) or 0,qty))
+    return true
+  end
+
+  local function gen3FillPP(mon)
+    if type(mon)~="table" then return end
+    local P=require("src.core.game3.pokemon")
+    mon.moves=mon.moves or {}
+    mon.pp=mon.pp or {}
+    mon.maxPp=mon.maxPp or {}
+    for i=1,4 do
+      local move=mon.moves[i]
+      if move and move~=0 then
+        local max=tonumber(mon.maxPp[i])
+        if not max then
+          local def=P.battleMove and P.battleMove(move)
+          max=tonumber(def and def.pp) or 5
+          mon.maxPp[i]=max
+        end
+        mon.pp[i]=max
+      end
+    end
+  end
+
+  local function gen3GrantBadges(s)
+    if not s then return end
+    s.badges=255
+    s.flags=s.flags or {}
+    local okS,Space=pcall(require,"src.core.game3.scripting.space")
+    local okF,Flags=pcall(require,"src.core.game3.scripting.flags")
+    local store=okS and Space and ((Space.getStore and Space.getStore()) or Space.store) or nil
+    for i=1,8 do
+      local id=0x820+i-1
+      local name=string.format("FLAG_BADGE0%d_GET",i)
+      s.flags[id]=true
+      s.flags[tostring(id)]=true
+      s.flags[name]=true
+      if store and okF and Flags and Flags.setFlag then Flags.setFlag(store,nil,id,true) end
+    end
+  end
+
+  local function gen3CompleteDex(s)
+    if not s then return end
+    local Dex=require("src.core.game3.dex")
+    s.dex=s.dex or Dex.new()
+    for sp=1,386 do Dex.setCaught(s.dex,sp) end
+  end
+
+  local function applyGen3ContinuousEffects()
+    local s=liveGen3Session()
+    if not s then return end
+
+    if enabled("cash") then s.money=999999 end
+    if enabled("coins") then s.coins=9999 end
+    if enabled("master_ball") then gen3EnsureItem("MASTER_BALL",99) end
+    if enabled("rare_candy") then gen3EnsureItem("RARE_CANDY",99) end
+    if enabled("pp_up") then gen3EnsureItem("PP_UP",99) end
+    if enabled("badges") then gen3GrantBadges(s) end
+    if enabled("complete_dex") then gen3CompleteDex(s) end
+
+    if type(s.party)=="table" then
+      for _,mon in ipairs(s.party) do
+        if type(mon)=="table" then
+          if enabled("party_hp") then
+            if not mon.maxHp then
+              local P=require("src.core.game3.pokemon")
+              if P.applyStats then P.applyStats(mon) end
+            end
+            if mon.maxHp then mon.hp=mon.maxHp end
+          end
+          if enabled("infinite_pp") then gen3FillPP(mon) end
+        end
+      end
+    end
+
+    local b=activeGen3Battle
+    if b then
+      local p=b.player and (b.player.mon or b.player)
+      if p and enabled("party_hp") then p.hp=tonumber(p.maxHp) or tonumber(p.hp) or 1 end
+      if p and enabled("infinite_pp") then gen3FillPP(p) end
+      local e=b.enemy and (b.enemy.mon or b.enemy)
+      if e and enabled("enemy_burn") and not e.status then
+        e.status="BRN"
+        if b.enemy then b.enemy.status="BRN" end
+      end
+    end
+  end
+
   mod.hooks:wrap("input.step", function(next,game,dt)
     installBattleArtCompat()
-    local save=game and game.save
+
+    if isGen3(game) then applyGen3ContinuousEffects() end
+
+    local save=(not isGen3(game)) and game and game.save or nil
     if save then
       if enabled("cash") then
         if isGen2(game) then
@@ -1507,6 +1615,8 @@ return function(mod)
     if enabled("enemy_burn") then burnEnemy(game) end
 
     local result=next(game,dt)
+
+    if isGen3(game) then applyGen3ContinuousEffects() end
 
     -- Re-apply Safari cheats AFTER the engine update too.  A completed player
     -- step decrements save.safari.steps and a thrown Safari Ball decrements
@@ -1595,9 +1705,10 @@ return function(mod)
       -- Gold constructs the actual Mon after the encounter roll. Carry these
       -- choices into that next matching build for gender/shiny finalization.
       local game=mod.game
-      if (isGen2(game) or isGen3(game)) and (state.wildGender~="random" or state.wildShiny~="random"
-         or state.wildNature~="random" or state.wildMaxIVs) then
-        state.pendingWild={ species=state.selectedSpecies, level=r.level }
+      if isGen3(game) then
+        state.pendingWild={species=state.selectedSpecies,level=r.level}
+      elseif isGen2(game) and (state.wildGender~="random" or state.wildShiny~="random") then
+        state.pendingWild={species=state.selectedSpecies,level=r.level}
       end
     end
     return r
@@ -1812,6 +1923,20 @@ return function(mod)
 
   mod.hooks:wrap("battle.damage", function(next,ctx)
     local damage,info=next(ctx)
+
+    if isGen3(mod.game) and ctx then
+      local userSide=ctx.user and ctx.user.side
+      local targetSide=ctx.target and ctx.target.side
+      if enabled("party_hp") and targetSide=="player" then
+        return 0,info
+      end
+      if enabled("enemy_hp") and userSide=="player" and targetSide=="enemy" then
+        local remaining=tonumber(ctx.target.hp)
+          or tonumber(ctx.target.mon and ctx.target.mon.hp)
+          or tonumber(damage) or 1
+        return math.max(1,remaining),info
+      end
+    end
 
     -- True Infinite HP: stop incoming move damage before the battle engine
     -- subtracts it or queues a faint.  This is more reliable than merely
@@ -3146,6 +3271,7 @@ return function(mod)
     if G3Menu.mode=="main" then
       if row.effect then
         setEnabled(row.effect,not enabled(row.effect))
+        applyGen3ContinuousEffects()
       elseif row.kind then
         g3Switch(row.kind)
       end
