@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.8.2
+-- GameShark Compatibility 0.8.3
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -67,6 +67,14 @@ local function isGen2(game)
 end
 
 local function isGen3(game)
+  -- FireRed's native Game3 object is not a Gen 1/2 Game object and does not
+  -- reliably expose save.generation.  Detect the active title first, exactly
+  -- at the engine-version boundary, then keep the old save-generation fallback
+  -- for compatibility with the Gen3 facade used by some mod API paths.
+  local ok,Version=pcall(require,"src.core.GameVersion")
+  if ok and Version and type(Version.get)=="function" and Version.get()=="firered" then
+    return true
+  end
   local s=game and game.save
   return s and s.generation==3 or false
 end
@@ -1217,7 +1225,10 @@ return function(mod)
     local inst=factory.new(game,...)
     if type(inst)~="table" then return nil end
 
-    local Stack=game and game.stack
+    -- FireRed does not use Game.stack/StateStack.  Its UI is owned by the
+    -- dedicated Game3 modal stack module.  Requiring that module directly is
+    -- the native path used by FireRed menus.
+    local Stack=require("src.ui.game3.stack")
     if type(Stack)~="table" or type(Stack.push)~="function"
        or type(Stack.pop)~="function" or type(Stack.top)~="function" then
       return nil
@@ -2829,11 +2840,34 @@ return function(mod)
 
   mod.hooks:wrap("ui.start_menu.items",function(next,game,items)
     local out=next(game,items); if type(out)~="table" then return out end
-    return mod.ui.insertBefore(out,"SAVE",{
+
+    -- Avoid duplicate rows if the hook is rebuilt/re-entered.
+    for _,row in ipairs(out) do
+      if row.id=="gameshark" then return out end
+    end
+
+    local entry={
+      id="gameshark",
       label="GAMESHARK",
-      onSelect=function(liveGame)
+      onSelect=function(liveGame,_session)
+        -- FireRed passes its live Game3 service object here.  Do not assume it
+        -- has the Gen 1/2 Game.stack field; pushScreen() routes FireRed to the
+        -- native src.ui.game3.stack module.
         pushScreen(liveGame or game,MAIN_SCREEN)
       end
-    })
-  end)
+    }
+
+    -- FireRed's native rows have stable ids ("save", "option", ...).  Gen 1/2
+    -- still use the label helper.  Supporting both keeps one hook portable.
+    if isGen3(game) then
+      local at=#out+1
+      for i,row in ipairs(out) do
+        if row.id=="save" then at=i; break end
+      end
+      table.insert(out,at,entry)
+      return out
+    end
+
+    return mod.ui.insertBefore(out,"SAVE",entry)
+  end,500)
 end

@@ -1,7 +1,7 @@
 {
   "id": "GameShark",
   "name": "GameShark Compatibility",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
@@ -16,6 +16,6 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat and debug menu for Gen1Recomp Gen 1, Gen 2 and FireRed. v0.8.2 adds a native FireRed/Game3 menu host so the GameShark menu and all submenus open correctly from FireRed's START menu.",
+  "description": "Universal GameShark-style cheat and debug menu for Gen1Recomp Gen 1, Gen 2 and FireRed. v0.8.3 fixes FireRed detection and opens GameShark through FireRed's native Game3 modal stack.",
   "github": "goofwear/gameshark"
 }

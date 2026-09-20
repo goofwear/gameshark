@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.8.2
+# GameShark Compatibility v0.8.3
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -6,6 +6,30 @@
 
 GameShark Compatibility is a standalone GameShark-style cheat and debug menu for **Gen1Recomp**. It automatically adapts to the active game and supports **Gen 1 and Gen 2** without depending on another cheat, move-manager, item-manager, or DV/EV mod.
 
+
+
+
+## FireRed START-menu fix — v0.8.3
+
+The remaining FireRed failure was not the menu drawing code itself. The mod was
+still deciding whether it was in Gen 3 by looking for `game.save.generation`.
+FireRed's native Game3 object does not reliably expose the same Gen 1/2
+`Game.save` shape, so the mod could incorrectly fall back to the Gen 1/2
+`mod.ui.push` path after the GAMESHARK row was selected.
+
+v0.8.3 fixes that in two places:
+
+- FireRed is detected from `src.core.GameVersion` (`firered`) first, with the old
+  save-generation check retained only as a fallback.
+- FireRed menus are pushed directly to `src.ui.game3.stack`, rather than looking
+  for a Gen 1/2-style `game.stack` field on the live FireRed object.
+- The START-menu row now has a stable `id = "gameshark"` and is inserted before
+  FireRed's native `save` row by id. The hook keeps the Gen 1/2 label-based path
+  unchanged.
+
+The implementation was independently adapted to Gen1Recomp's public/current
+Game3 architecture after comparing behavior with another FireRed-native cheat
+mod. No source from that mod is copied into GameShark.
 
 ## FireRed menu fix — v0.8.2
 
@@ -51,7 +75,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.8.2.zip
+GameShark-0.8.3.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -322,7 +346,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.8.2.zip
+GameShark-0.8.3.zip
 ```
 
 ## Development notes

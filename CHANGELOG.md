@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.3] - 2026-09-20
+
+### Fixed
+- Fixed FireRed being misdetected as the Gen 1/2 UI path after selecting the
+  GAMESHARK row.
+- FireRed detection now checks the active `GameVersion` for `firered`.
+- FireRed GameShark screens now push directly to `src.ui.game3.stack`, the
+  native modal UI stack used by the FireRed recomp.
+- Added a stable `gameshark` START-menu row id and native FireRed insertion
+  before the `save` row.
+- Gen 1 and Gen 2 keep their previous menu path and behavior.
+
+
 ## [0.8.2] - 2026-09-20
 
 ### Fixed
