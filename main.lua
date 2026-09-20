@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.8.1
+-- GameShark Compatibility 0.8.2
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -1199,79 +1199,154 @@ return function(mod)
   local HEX="0123456789ABCDEF"
   local function hexDigit(v) return HEX:sub((v or 0)+1,(v or 0)+1) end
 
-  -- FireRed (Gen 3) uses src/ui/game3/stack.lua for field menus rather than
-  -- the Gen 1/2 StateStack. The shared mod.ui widgets still use the legacy
-  -- screen contract, so bridge that tiny contract onto FireRed's modal stack.
-  local function gen3UiGame(game)
-    if not isGen3(game) then return game end
-    if rawget(game,"__gamesharkGen3UiProxy") then return game end
+  -- FireRed uses a completely separate 240x160 modal UI stack.  The ordinary
+  -- mod.ui ListMenu objects are Gen 1/2 screens, so pushing one directly onto
+  -- FireRed's stack either fails during screen resolution or leaves a legacy
+  -- 160x144 menu that Game3 cannot drive.  For Gen 3 we still let each
+  -- registered GameShark screen build its normal ListMenu data, but host that
+  -- data inside a small native FireRed menu adapter.
+  local gen3MenuSerial=0
 
-    local real=rawget(game,"__gamesharkRealGame") or game
-    local native=real and real.stack
-    if type(native)~="table" or type(native.push)~="function"
-       or type(native.pop)~="function" or type(native.top)~="function" then
-      return game
+  local function pushGen3Screen(game,id,...)
+    local factory=mod.content.screens:get(id)
+    if type(factory)=="function" then factory={new=factory} end
+    if type(factory)~="table" or type(factory.new)~="function" then
+      return nil
     end
 
-    local proxy={__gamesharkGen3UiProxy=true,__gamesharkRealGame=real}
-    setmetatable(proxy,{__index=real,__newindex=real})
-    local owned={}
-    local serial=0
-    local stackBridge={}
+    local inst=factory.new(game,...)
+    if type(inst)~="table" then return nil end
 
-    function stackBridge:push(inst)
-      if type(inst)~="table" then return nil end
-      serial=serial+1
-      local sid=tostring(inst.screenId or "screen")
-      local layerId="gameshark:"..sid..":"..tostring(serial)
-      owned[layerId]=inst
-      local host={}
-      function host.update(dt)
-        if inst.update then return inst:update(dt) end
-      end
-      function host.draw()
-        if inst.draw then return inst:draw() end
-      end
-      function host.handleInput(_input)
-        -- inst:update already consumed the edge at the start of Hud.update.
-        -- Claim the modal input here so the START menu underneath cannot also
-        -- react to the same A/B/D-pad press.
-        return true
-      end
-      native.push(layerId,host,{hideBelow=true})
-      return inst
+    local Stack=game and game.stack
+    if type(Stack)~="table" or type(Stack.push)~="function"
+       or type(Stack.pop)~="function" or type(Stack.top)~="function" then
+      return nil
     end
 
-    function stackBridge:pop()
-      local top=native.top()
-      if top and owned[top.id] then
-        owned[top.id]=nil
-        return native.pop(top.id)
+    local Window=require("src.ui.game3.window")
+    local FrlgFont=require("src.ui.game3.frlg_font")
+
+    gen3MenuSerial=gen3MenuSerial+1
+    local layerId="gameshark:"..tostring(id)..":"..tostring(gen3MenuSerial)
+    local host={}
+    local ROWS=8
+
+    inst.rows=ROWS
+    inst.index=math.max(1,math.min(tonumber(inst.index) or 1,
+      math.max(1,#(inst.items or {}))))
+    inst.scroll=math.max(0,tonumber(inst.scroll) or 0)
+
+    local function syncScroll()
+      local n=#(inst.items or {})
+      if n<1 then inst.index=1; inst.scroll=0; return end
+      inst.index=math.max(1,math.min(inst.index,n))
+      if inst.index-inst.scroll>ROWS then
+        inst.scroll=inst.index-ROWS
+      elseif inst.index-inst.scroll<1 then
+        inst.scroll=inst.index-1
       end
-      return false
+      inst.scroll=math.max(0,math.min(inst.scroll,math.max(0,n-ROWS)))
     end
 
-    function stackBridge:top()
-      local top=native.top()
-      return top and owned[top.id] or nil
+    local function popSelf()
+      local top=Stack.top()
+      if top and top.id==layerId then
+        return Stack.pop(layerId)
+      end
+      return Stack.pop(layerId)
     end
 
-    function stackBridge:clear()
-      while true do
-        local top=native.top()
-        if not (top and owned[top.id]) then break end
-        owned[top.id]=nil
-        native.pop(top.id)
+    -- Every GameShark callback already calls current:close() before opening
+    -- its next submenu.  Make that operation remove this native Game3 layer.
+    inst.close=function() return popSelf() end
+
+    local function move(delta)
+      local n=#(inst.items or {})
+      if n<1 then return end
+      inst.index=math.max(1,math.min(n,inst.index+delta))
+      syncScroll()
+    end
+
+    function host.handleInput(input)
+      if not input then return true end
+
+      if input:wasPressed("up") then
+        move(-1)
+      elseif input:wasPressed("down") then
+        move(1)
+      elseif input:wasPressed("left") and inst.pageJump then
+        move(-ROWS)
+      elseif input:wasPressed("right") and inst.pageJump then
+        move(ROWS)
+      elseif input:wasPressed("select") and inst.onSelectKey then
+        local item=(inst.items or {})[inst.index]
+        inst.onSelectKey(item,inst)
+      elseif input:wasPressed("b") then
+        popSelf()
+        if inst.onCancel then inst.onCancel() end
+      elseif input:wasPressed("a") then
+        local item=(inst.items or {})[inst.index]
+        if item and inst.onChoose then
+          inst.onChoose(item,inst)
+        end
+      end
+      return true
+    end
+
+    function host.update(_dt)
+      -- Input is intentionally handled by handleInput().  Game3's HUD calls
+      -- that only for the top modal layer, preventing the START menu underneath
+      -- from receiving the same A/B/D-pad edge.
+    end
+
+    function host.draw()
+      local items=inst.items or {}
+      syncScroll()
+
+      local tpl=Window.template(1,1,28,18)
+      Window.stdFrame(tpl)
+
+      local title=tostring(inst.title or "GAMESHARK G3")
+      Window.printPx(title,16,10,{maxWidth=208})
+
+      local firstY=30
+      local rightEdge=222
+      for row=1,ROWS do
+        local i=inst.scroll+row
+        local item=items[i]
+        if not item then break end
+        local y=firstY+(row-1)*15
+        if i==inst.index then Window.cursorPx(14,y) end
+
+        local label=tostring(item.label or "")
+        Window.printPx(label,24,y,{maxWidth=150})
+
+        if item.right~=nil then
+          local right=tostring(item.right)
+          local w=FrlgFont.measure and FrlgFont.measure(right) or (#right*6)
+          Window.printPx(right,math.max(174,rightEdge-w),y,{maxWidth=48})
+        end
+      end
+
+      if inst.scroll>0 then
+        Window.printPx("▲",226,28,{maxWidth=10})
+      end
+      if inst.scroll+ROWS<#items then
+        Window.printPx("▼",226,134,{maxWidth=10})
+      end
+
+      if inst.footer then
+        Window.printPx(tostring(inst.footer),16,145,{maxWidth=208})
       end
     end
 
-    proxy.stack=stackBridge
-    return proxy
+    Stack.push(layerId,host,{hideBelow=true})
+    return inst
   end
 
   local function pushScreen(game,id,...)
     if isGen3(game) then
-      return mod.ui.push(gen3UiGame(game),id,...)
+      return pushGen3Screen(game,id,...)
     end
     return mod.ui.push(game,id,...)
   end
@@ -2754,6 +2829,11 @@ return function(mod)
 
   mod.hooks:wrap("ui.start_menu.items",function(next,game,items)
     local out=next(game,items); if type(out)~="table" then return out end
-    return mod.ui.insertBefore(out,"SAVE",{label="GAMESHARK",onSelect=function() pushScreen(game,MAIN_SCREEN) end})
+    return mod.ui.insertBefore(out,"SAVE",{
+      label="GAMESHARK",
+      onSelect=function(liveGame)
+        pushScreen(liveGame or game,MAIN_SCREEN)
+      end
+    })
   end)
 end

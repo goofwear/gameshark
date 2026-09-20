@@ -1,10 +1,24 @@
-# GameShark Compatibility v0.8.1
+# GameShark Compatibility v0.8.2
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
 **Repository:** https://github.com/goofwear/gameshark
 
 GameShark Compatibility is a standalone GameShark-style cheat and debug menu for **Gen1Recomp**. It automatically adapts to the active game and supports **Gen 1 and Gen 2** without depending on another cheat, move-manager, item-manager, or DV/EV mod.
+
+
+## FireRed menu fix — v0.8.2
+
+FireRed uses Gen1Recomp's separate **Game3 240×160 modal UI stack**. Version
+0.8.2 no longer tries to place the Gen 1/2 `ListMenu` screen directly on that
+stack. Instead, GameShark builds its normal menu data and presents it through a
+native FireRed menu host using Game3's own window/font/stack APIs.
+
+This applies to the main **GAMESHARK G3** screen and every GameShark submenu.
+The START-menu hook also uses the live Game3 object passed to the row's
+`onSelect` callback.
+
+Gen 1 and Gen 2 keep their existing UI path unchanged.
 
 ## Supported games
 
@@ -37,7 +51,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.8.1.zip
+GameShark-0.8.2.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -308,7 +322,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.8.1.zip
+GameShark-0.8.2.zip
 ```
 
 ## Development notes

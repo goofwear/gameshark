@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.2] - 2026-09-20
+
+### Fixed
+- Fixed FireRed START-menu **GAMESHARK** row appearing but doing nothing when A
+  was pressed.
+- Added a native Game3 240×160 menu host for the GameShark main menu and all
+  GameShark submenus.
+- The FireRed hook now prefers the live Game3 object supplied to `onSelect`
+  instead of relying only on the object captured while the START-menu rows were
+  constructed.
+- Gen 1 and Gen 2 menu behavior is unchanged.
+
+
 ## [0.8.1] - 2026-09-20
 
 ### Fixed
