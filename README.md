@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.8.7
+# GameShark Compatibility v0.8.9
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -13,6 +13,49 @@ GameShark Compatibility is a standalone GameShark-style cheat and debug menu for
 
 
 
+
+
+
+## FireRed Walk Through Walls completion — v0.8.9
+
+The v0.8.8 persistent `Collision.canEnter()` wrapper proved the basic FireRed
+path was correct: ordinary walls/trees/fences could be crossed. Video testing
+also showed that some FireRed blockers still lived outside that single
+collision return path.
+
+v0.8.9 keeps the native collision wrapper and adds a final player-movement
+fallback at `Player.tryMove()`:
+
+- FireRed first performs its normal movement logic.
+- If the result is still `"blocked"` while **WALK THRU WALLS** is ON,
+  GameShark calls FireRed's own `Player.scriptStep(dir)`.
+- `scriptStep()` is Gen1Recomp's native forced one-cell movement routine and
+  explicitly skips collision.
+- `"bounds"` failures are still preserved, so map connections and loaded-map
+  edges are not bypassed.
+
+This makes Walk Through Walls cover residual water/entity/tile blockers without
+rewriting the FireRed movement engine.
+
+## FireRed Walk Through Walls correction — v0.8.8
+
+v0.8.7 identified the correct FireRed collision function but wrapped it at the
+wrong time. In Game3, the `input.step` mod hook is a **pre-tick notification**
+whose `next()` function is only a no-op. Actual player movement runs afterward
+inside `Game3:fixedUpdate()`. That meant v0.8.7 restored
+`game3.collision.canEnter()` before `Player.tryMove()` ever called it.
+
+v0.8.8 installs one persistent wrapper around FireRed's native
+`game3.collision.canEnter()` instead. The wrapper checks the GameShark
+**WALK THRU WALLS** toggle dynamically:
+
+- OFF: native FireRed collision is returned unchanged.
+- ON: blocked checks originating from the live player are allowed.
+- map-boundary failures remain blocked so normal map connections/warps continue
+  to work and the player cannot step outside the loaded map.
+- NPC/script/pathfinding checks keep native collision behavior.
+
+This directly covers the path used by FireRed's `Player.tryMove()`.
 
 ## FireRed Walk Through Walls fix — v0.8.7
 
@@ -143,7 +186,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.8.7.zip
+GameShark-0.8.9.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -414,7 +457,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.8.7.zip
+GameShark-0.8.9.zip
 ```
 
 ## Development notes

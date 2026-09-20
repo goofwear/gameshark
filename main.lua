@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.8.7
+-- GameShark Compatibility 0.8.9
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -1537,36 +1537,77 @@ return function(mod)
     end
   end
 
+  local g3WalkWrapperInstalled=false
+
+  local function installGen3WalkThroughWalls()
+    if g3WalkWrapperInstalled then return true end
+    if not isGen3(mod.game) then return false end
+
+    local okC,C=pcall(require,"src.core.game3.collision")
+    local okP,P=pcall(require,"src.core.game3.player")
+    if not (okC and C and type(C.canEnter)=="function" and okP and P) then
+      return false
+    end
+
+    local original=C.canEnter
+
+    C.canEnter=function(game,tx,ty,opts)
+      local allowed,reason=original(game,tx,ty,opts)
+      if allowed or not enabled("walk") then
+        return allowed,reason
+      end
+
+      opts=opts or {}
+
+      -- Only override movement checks that originate at the live player.
+      -- Internal NPC/script/pathfinding calls keep normal collision.
+      local fromPlayer=(tonumber(opts.fromX)==tonumber(P.cellX)
+        and tonumber(opts.fromY)==tonumber(P.cellY))
+
+      if not fromPlayer then
+        return allowed,reason
+      end
+
+      -- Never bypass the edge of the currently loaded map.  Map connections
+      -- and normal warps still need the engine's boundary handling.
+      if reason=="bounds" then
+        return false,reason
+      end
+
+      -- Walls, trees, fences, water, directional blockers, NPCs and temporary
+      -- metatile blockers are all passable while the cheat is enabled.
+      return true,"gameshark_walk"
+    end
+
+    -- Some FireRed movement cases are decided in Player.tryMove before/after
+    -- canEnter (ledge/special movement and other field-specific blockers).
+    -- Add a final player-only fallback: if native movement returns "blocked",
+    -- use Player.scriptStep(), which is the engine's own forced one-cell step
+    -- and explicitly skips collision.  Preserve map bounds/connections.
+    if type(P.tryMove)=="function" and not P._gamesharkTryMoveWrapped then
+      local originalTryMove=P.tryMove
+      P.tryMove=function(dir,game,run)
+        local result,reason=originalTryMove(dir,game,run)
+        if enabled("walk") and result=="blocked" and reason~="bounds" then
+          if P.scriptStep and P.scriptStep(dir) then
+            return "step","gameshark_walk"
+          end
+        end
+        return result,reason
+      end
+      P._gamesharkTryMoveWrapped=true
+    end
+
+    g3WalkWrapperInstalled=true
+    return true
+  end
+
   mod.hooks:wrap("input.step", function(next,game,dt)
     installBattleArtCompat()
 
-    if isGen3(game) then applyGen3ContinuousEffects() end
-
-    -- FireRed's native Player.tryMove calls game3.collision.canEnter directly.
-    -- The shared movement.collision hook is exposed by the Gen3 compatibility
-    -- facade, but normal Game3 walking does not travel through that facade.
-    -- Patch canEnter only while this Game3 input tick is executing, and only
-    -- when the caller's from-cell is the live player cell.  Preserve map bounds
-    -- so Walk Through Walls cannot walk off the loaded map.
-    local g3Collision,g3CanEnter
-    if isGen3(game) and enabled("walk") then
-      local okC,C=pcall(require,"src.core.game3.collision")
-      local okP,P=pcall(require,"src.core.game3.player")
-      if okC and C and type(C.canEnter)=="function" and okP and P then
-        g3Collision=C
-        g3CanEnter=C.canEnter
-        C.canEnter=function(g,tx,ty,opts)
-          local allowed,reason=g3CanEnter(g,tx,ty,opts)
-          if allowed then return true,nil end
-          opts=opts or {}
-          local fromPlayer=(tonumber(opts.fromX)==tonumber(P.cellX)
-            and tonumber(opts.fromY)==tonumber(P.cellY))
-          if fromPlayer and reason~="bounds" then
-            return true,"gameshark"
-          end
-          return allowed,reason
-        end
-      end
+    if isGen3(game) then
+      installGen3WalkThroughWalls()
+      applyGen3ContinuousEffects()
     end
 
     local save=(not isGen3(game)) and game and game.save or nil
@@ -1641,11 +1682,7 @@ return function(mod)
     end
     if enabled("enemy_burn") then burnEnemy(game) end
 
-    local okStep,result=pcall(next,game,dt)
-    if g3Collision and g3CanEnter then
-      g3Collision.canEnter=g3CanEnter
-    end
-    if not okStep then error(result) end
+    local result=next(game,dt)
 
     if isGen3(game) then applyGen3ContinuousEffects() end
 

@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.8.9] - 2026-09-20
+
+### Fixed
+- Completed FireRed Walk Through Walls after video testing showed v0.8.8 was
+  only partial.
+- Kept the persistent native `Collision.canEnter()` bypass.
+- Added a player-only `Player.tryMove()` fallback: when FireRed still returns
+  `"blocked"` and Walk Through Walls is enabled, GameShark uses the native
+  `Player.scriptStep()` routine to force a one-cell collision-free step.
+- Map-boundary failures remain protected.
+
+
+## [0.8.8] - 2026-09-20
+
+### Fixed
+- Corrected the FireRed Walk Through Walls implementation from v0.8.7.
+- Gen1Recomp's Game3 `input.step` hook fires before the actual FireRed movement
+  update and its `next()` is a no-op, so v0.8.7 restored collision too early.
+- GameShark now installs a persistent wrapper around
+  `src.core.game3.collision.canEnter()`.
+- The wrapper dynamically honors the WALK THRU WALLS toggle and only bypasses
+  blocked checks originating from the live player.
+- Map bounds remain protected; ordinary NPC/script/pathfinding collision remains
+  native when it is not a player-originating movement check.
+
+
 ## [0.8.7] - 2026-09-20
 
 ### Fixed
