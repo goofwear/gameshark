@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.8.4
+# GameShark Compatibility v0.8.5
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -10,6 +10,17 @@ GameShark Compatibility is a standalone GameShark-style cheat and debug menu for
 
 
 
+
+
+## FireRed native menu rewrite — v0.8.5
+
+v0.8.5 removes the FireRed dependency on the legacy Gen 1/2 ListMenu screen
+registry entirely. FireRed now has its own native Game3 GameShark menu object,
+pushed directly onto `src.ui.game3.stack` from the START-menu callback.
+
+The native FireRed menu includes GameShark toggles plus Wild Pokemon, Teleport,
+Give Item, Teach Move, IV/EV editing, and Friendship submenus. Gen 1 and Gen 2
+continue using the existing GameShark screen system unchanged.
 
 ## FireRed activation fix — v0.8.4
 
@@ -98,7 +109,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.8.4.zip
+GameShark-0.8.5.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -369,7 +380,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.8.4.zip
+GameShark-0.8.5.zip
 ```
 
 ## Development notes

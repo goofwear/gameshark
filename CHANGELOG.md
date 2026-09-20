@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.5] - 2026-09-20
+
+### Fixed
+- Replaced the FireRed legacy-screen adapter with a fully native Game3 menu.
+- The FireRed START-menu callback now directly pushes the native GameShark menu.
+- Added native FireRed submenus for Wild Pokemon, Teleport, Give Item, Teach
+  Move, IV/EV editing, and Friendship.
+- Gen 1 and Gen 2 menu paths remain unchanged.
+
+
 ## [0.8.4] - 2026-09-20
 
 ### Fixed

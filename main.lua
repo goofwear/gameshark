@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.8.4
+-- GameShark Compatibility 0.8.5
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -2866,6 +2866,443 @@ return function(mod)
     return menu
   end})
 
+
+  ---------------------------------------------------------------------------
+  -- FireRed native menu
+  --
+  -- FireRed's UI does not instantiate Gen 1/2 ListMenu screens.  Keep a
+  -- completely separate native Game3 menu object for FireRed, using the same
+  -- GameShark state and cheat handlers.  This deliberately does NOT depend on
+  -- the registered legacy screen factories at all.
+  ---------------------------------------------------------------------------
+
+  local G3Menu={open=false,mode="main",cursor=1,scroll=0,game=nil,session=nil,
+    selectedNational=25,selectedItem=1,itemQty=1,selectedParty=1,selectedMove=1}
+
+  local function g3RuntimeSession()
+    local R=package.loaded["src.core.game3.runtime"] or require("src.core.game3.runtime")
+    local s=R and R.getSession and R.getSession() or nil
+    return s,R
+  end
+
+  local function g3Pokemon()
+    return require("src.core.game3.pokemon")
+  end
+
+  local function g3Party()
+    local s=g3RuntimeSession()
+    return s and s.party or {}
+  end
+
+  local function g3MonName(mon)
+    if not mon then return "EMPTY" end
+    local P=g3Pokemon()
+    local ok,name=pcall(function()
+      if P.displayName then return P.displayName(mon) end
+      if P.displayMonName then return P.displayMonName(mon) end
+    end)
+    return (ok and name) or tostring(mon.nickname or mon.species or "POKEMON")
+  end
+
+  local function g3SpeciesLimit()
+    local P=g3Pokemon()
+    for n=386,1,-1 do
+      local ok,v=pcall(P.speciesFromNational,n)
+      if ok and v then return n end
+    end
+    return 386
+  end
+
+  local function g3SelectedSpecies()
+    local P=g3Pokemon()
+    local n=math.max(1,math.min(g3SpeciesLimit(),G3Menu.selectedNational or 25))
+    local ok,slot=pcall(P.speciesFromNational,n)
+    return ok and slot or nil
+  end
+
+  local function g3GiveItem(id,qty)
+    local s=g3RuntimeSession()
+    if not (s and s.bag) then return false end
+    local Bag=require("src.core.game3.bag")
+    local D=require("src.core.game3.items_data")
+    local info=D.info and D.info(id) or nil
+    local q=math.max(1,math.min(999,math.floor(tonumber(qty) or 1)))
+    if info and (info.pocket=="KEY_ITEMS" or (id>=339 and id<=346)) then q=1 end
+    local cur=Bag.get(s.bag,id) or 0
+    Bag.set(s.bag,id,math.min(999,cur+q))
+    return true
+  end
+
+  local function g3Teach(mon,moveId,slot)
+    if not mon then return false end
+    local P=g3Pokemon()
+    if P.knowsMove and P.knowsMove(mon,moveId) then return true end
+    if slot and P.replaceMove then return P.replaceMove(mon,slot,moveId)~=nil end
+    if P.teachMove then return P.teachMove(mon,moveId)==true end
+    return false
+  end
+
+  local function g3Recalc(mon)
+    if mon and g3Pokemon().applyStats then g3Pokemon().applyStats(mon) end
+  end
+
+  local function g3StartBattle()
+    local slot=g3SelectedSpecies()
+    if not slot then return false end
+    local level=state.wildLevel or 5
+    local ok,err=require("src.core.game3.battle_bridge").start(
+      mod,G3Menu.game,{species=slot,speciesId=slot,level=level},{wild=true})
+    return ok,err
+  end
+
+  local function g3Teleport(row)
+    if not row or not row.loc then return false end
+    G3Menu.open=false
+    local Stack=require("src.ui.game3.stack")
+    Stack.pop("gameshark")
+    local Start=require("src.ui.game3.start_menu")
+    if Start.isOpen and Start.isOpen() then Start.close() end
+    return require("src.core.game3.map").load(
+      mod,G3Menu.game,row.loc.map,{x=row.loc.x,y=row.loc.y,facing="down"})
+  end
+
+  local function g3ItemRows()
+    local pack=require("src.core.game3.items_data").ensureLoaded() or {}
+    local out={}
+    for id,d in pairs(pack) do
+      id=tonumber(id)
+      if id and id>0 and type(d)=="table" and d.name and d.name~=""
+         and d.name~="????????" then
+        out[#out+1]={label=d.name,id=id}
+      end
+    end
+    table.sort(out,function(a,b) return a.id<b.id end)
+    return out
+  end
+
+  local function g3MoveRows()
+    local P=g3Pokemon()
+    local out={}
+    for id=1,354 do
+      if P.battleMove and P.battleMove(id) then
+        out[#out+1]={label=(P.moveName and P.moveName(id)) or ("MOVE "..id),id=id}
+      end
+    end
+    return out
+  end
+
+  local function g3PartyRows()
+    local out={}
+    for i,m in ipairs(g3Party()) do
+      out[#out+1]={label=tostring(i)..". "..g3MonName(m),slot=i,
+        value="L"..tostring(m.level or 1)}
+    end
+    if #out==0 then out[1]={label="NO POKEMON",disabled=true} end
+    return out
+  end
+
+  local function g3MainRows()
+    local out={}
+    for _,c in ipairs(CHEATS) do
+      if cheatSupported(c,G3Menu.game) and c.effect~="wild_pick" then
+        out[#out+1]={label=c.name,effect=c.effect,
+          value=enabled(c.effect) and "ON" or "OFF"}
+      end
+    end
+    out[#out+1]={label="WILD POKEMON >",kind="wild"}
+    out[#out+1]={label="FRIENDSHIP >",kind="friend_party"}
+    out[#out+1]={label="TEACH MOVE >",kind="move_party"}
+    out[#out+1]={label="GIVE ITEM >",kind="item"}
+    out[#out+1]={label="TELEPORT >",kind="teleport"}
+    out[#out+1]={label="IV / EV EDITOR >",kind="stats_party"}
+    return out
+  end
+
+  local function g3Rows()
+    if G3Menu.mode=="main" then return g3MainRows() end
+    if G3Menu.mode=="wild" then
+      local P=g3Pokemon()
+      local slot=g3SelectedSpecies()
+      local name=slot and ((P.name and P.name(slot)) or ("#"..G3Menu.selectedNational)) or "UNKNOWN"
+      return {
+        {label="WILD PICK",kind="wild_toggle",value=enabled("wild_pick") and "ON" or "OFF"},
+        {label="POKEMON",kind="species",value=tostring(name)},
+        {label="LEVEL",kind="level",value=state.wildLevel and tostring(state.wildLevel) or "AUTO"},
+        {label="GENDER",kind="gender",value=string.upper(state.wildGender)},
+        {label="SHINY",kind="shiny",value=string.upper(state.wildShiny)},
+        {label="NATURE",kind="nature",value=string.upper(state.wildNature)},
+        {label="MAX IVS",kind="maxivs",value=state.wildMaxIVs and "YES" or "NO"},
+        {label="BATTLE NOW",kind="battle",value=">"},
+        {label="BACK",kind="back"},
+      }
+    end
+    if G3Menu.mode=="species" then
+      local P=g3Pokemon(); local out={}
+      for n=1,g3SpeciesLimit() do
+        local s=P.speciesFromNational(n)
+        out[#out+1]={label=string.format("#%03d %s",n,(s and P.name and P.name(s)) or "POKEMON"),nat=n}
+      end
+      return out
+    end
+    if G3Menu.mode=="teleport" then
+      local H=require("src.core.game3.heal_locations")
+      local names={"PALLET TOWN","VIRIDIAN CITY","PEWTER CITY","CERULEAN CITY",
+        "LAVENDER TOWN","VERMILION CITY","CELADON CITY","FUCHSIA CITY",
+        "CINNABAR ISLAND","INDIGO PLATEAU","SAFFRON CITY","ROUTE 4","ROUTE 10",
+        "ONE ISLAND","TWO ISLAND","THREE ISLAND","FOUR ISLAND","FIVE ISLAND",
+        "SEVEN ISLAND","SIX ISLAND"}
+      local out={}
+      for i,name in ipairs(names) do
+        local loc=H.get(i)
+        if loc then out[#out+1]={label=name,loc=loc} end
+      end
+      return out
+    end
+    if G3Menu.mode=="item" then return g3ItemRows() end
+    if G3Menu.mode=="item_qty" then
+      return {
+        {label="QUANTITY",kind="qty",value=tostring(G3Menu.itemQty)},
+        {label="GIVE ITEM",kind="give",value=">"},
+        {label="BACK",kind="back"},
+      }
+    end
+    if G3Menu.mode=="move_party" or G3Menu.mode=="stats_party" or G3Menu.mode=="friend_party" then
+      return g3PartyRows()
+    end
+    if G3Menu.mode=="move" then return g3MoveRows() end
+    if G3Menu.mode=="move_slot" then
+      local m=g3Party()[G3Menu.selectedParty]; local P=g3Pokemon(); local out={}
+      for i=1,4 do
+        local id=P.moveIdAt and P.moveIdAt(m,i) or nil
+        out[#out+1]={label="SLOT "..i,slot=i,
+          value=(id and P.moveName and P.moveName(id)) or "EMPTY"}
+      end
+      out[#out+1]={label="BACK",kind="back"}
+      return out
+    end
+    if G3Menu.mode=="friend" then
+      local m=g3Party()[G3Menu.selectedParty]
+      local v=m and tonumber(m.happiness or m.friendship) or 0
+      return {
+        {label="CURRENT",kind="readonly",value=tostring(v)},
+        {label="MAX FRIENDSHIP",kind="friend_max",value="255"},
+        {label="ZERO FRIENDSHIP",kind="friend_zero",value="0"},
+        {label="BACK",kind="back"},
+      }
+    end
+    if G3Menu.mode=="stats" then
+      local m=g3Party()[G3Menu.selectedParty]
+      if not m then return {{label="BACK",kind="back"}} end
+      m.ivs=m.ivs or {}; m.evs=m.evs or {}
+      local out={}
+      local keys={{"HP","hp"},{"ATK","atk"},{"DEF","def"},{"SPD","spe"},{"SP ATK","spa"},{"SP DEF","spd"}}
+      for _,k in ipairs(keys) do out[#out+1]={label=k[1].." IV",kind="iv",key=k[2],value=tostring(m.ivs[k[2]] or 0)} end
+      for _,k in ipairs(keys) do out[#out+1]={label=k[1].." EV",kind="ev",key=k[2],value=tostring(m.evs[k[2]] or 0)} end
+      out[#out+1]={label="MAX ALL IVS",kind="max_iv"}
+      out[#out+1]={label="MAX ALL EVS",kind="max_ev"}
+      out[#out+1]={label="ZERO ALL EVS",kind="zero_ev"}
+      out[#out+1]={label="BACK",kind="back"}
+      return out
+    end
+    return {}
+  end
+
+  local function g3Clamp()
+    local list=g3Rows()
+    local n=math.max(1,#list)
+    G3Menu.cursor=math.max(1,math.min(n,G3Menu.cursor))
+    local visible=7
+    if G3Menu.cursor<=G3Menu.scroll then G3Menu.scroll=G3Menu.cursor-1 end
+    if G3Menu.cursor>G3Menu.scroll+visible then G3Menu.scroll=G3Menu.cursor-visible end
+    G3Menu.scroll=math.max(0,math.min(G3Menu.scroll,math.max(0,n-visible)))
+  end
+
+  local function g3Switch(mode)
+    G3Menu.mode=mode
+    G3Menu.cursor=1
+    G3Menu.scroll=0
+    g3Clamp()
+  end
+
+  function G3Menu.show(game,session)
+    G3Menu.game=game
+    G3Menu.session=session
+    G3Menu.open=true
+    G3Menu.mode="main"
+    G3Menu.cursor=1
+    G3Menu.scroll=0
+    require("src.ui.game3.stack").push("gameshark",G3Menu,{hideBelow=true})
+  end
+
+  function G3Menu.close()
+    G3Menu.open=false
+    require("src.ui.game3.stack").pop("gameshark")
+  end
+
+  local function g3Activate()
+    local row=g3Rows()[G3Menu.cursor]
+    if not row or row.disabled then return end
+
+    if G3Menu.mode=="main" then
+      if row.effect then
+        setEnabled(row.effect,not enabled(row.effect))
+      elseif row.kind then
+        g3Switch(row.kind)
+      end
+      return
+    end
+
+    if G3Menu.mode=="wild" then
+      if row.kind=="wild_toggle" then setEnabled("wild_pick",not enabled("wild_pick"))
+      elseif row.kind=="species" then g3Switch("species")
+      elseif row.kind=="level" then
+        state.wildLevel=state.wildLevel and ((state.wildLevel%100)+1) or 1; persist()
+      elseif row.kind=="gender" then state.wildGender=cycleChoice(state.wildGender,GENDER_CHOICES); persist()
+      elseif row.kind=="shiny" then state.wildShiny=cycleChoice(state.wildShiny,SHINY_CHOICES); persist()
+      elseif row.kind=="nature" then state.wildNature=cycleChoice(state.wildNature,NATURE_CHOICES); persist()
+      elseif row.kind=="maxivs" then state.wildMaxIVs=not state.wildMaxIVs; persist()
+      elseif row.kind=="battle" then
+        local slot=g3SelectedSpecies()
+        if slot then
+          state.selectedSpecies=slot
+          state.pendingWild={species=slot,level=state.wildLevel or 5}
+          G3Menu.close()
+          local Start=require("src.ui.game3.start_menu")
+          if Start.isOpen and Start.isOpen() then Start.close() end
+          g3StartBattle()
+        end
+      elseif row.kind=="back" then g3Switch("main") end
+      return
+    end
+
+    if G3Menu.mode=="species" then
+      G3Menu.selectedNational=row.nat
+      state.selectedSpecies=g3SelectedSpecies() or state.selectedSpecies
+      persist()
+      g3Switch("wild")
+      return
+    end
+
+    if G3Menu.mode=="teleport" then g3Teleport(row); return end
+
+    if G3Menu.mode=="item" then
+      G3Menu.selectedItem=row.id; G3Menu.itemQty=1; g3Switch("item_qty"); return
+    end
+    if G3Menu.mode=="item_qty" then
+      if row.kind=="qty" then G3Menu.itemQty=(G3Menu.itemQty%999)+1
+      elseif row.kind=="give" then g3GiveItem(G3Menu.selectedItem,G3Menu.itemQty)
+      elseif row.kind=="back" then g3Switch("item") end
+      return
+    end
+
+    if G3Menu.mode=="move_party" then
+      G3Menu.selectedParty=row.slot; g3Switch("move"); return
+    end
+    if G3Menu.mode=="move" then
+      G3Menu.selectedMove=row.id
+      local m=g3Party()[G3Menu.selectedParty]
+      local P=g3Pokemon()
+      local count=P.moveSlotCount and P.moveSlotCount(m) or #(m and m.moves or {})
+      if (P.knowsMove and P.knowsMove(m,row.id)) or count<4 then
+        g3Teach(m,row.id,nil); g3Switch("move_party")
+      else
+        g3Switch("move_slot")
+      end
+      return
+    end
+    if G3Menu.mode=="move_slot" then
+      if row.kind=="back" then g3Switch("move")
+      else
+        g3Teach(g3Party()[G3Menu.selectedParty],G3Menu.selectedMove,row.slot)
+        g3Switch("move_party")
+      end
+      return
+    end
+
+    if G3Menu.mode=="friend_party" then
+      G3Menu.selectedParty=row.slot; g3Switch("friend"); return
+    end
+    if G3Menu.mode=="friend" then
+      local m=g3Party()[G3Menu.selectedParty]
+      if row.kind=="friend_max" and m then m.happiness=255; m.friendship=255
+      elseif row.kind=="friend_zero" and m then m.happiness=0; m.friendship=0
+      elseif row.kind=="back" then g3Switch("friend_party") end
+      return
+    end
+
+    if G3Menu.mode=="stats_party" then
+      G3Menu.selectedParty=row.slot; g3Switch("stats"); return
+    end
+    if G3Menu.mode=="stats" then
+      local m=g3Party()[G3Menu.selectedParty]
+      if not m then return end
+      m.ivs=m.ivs or {}; m.evs=m.evs or {}
+      if row.kind=="iv" then m.ivs[row.key]=((tonumber(m.ivs[row.key]) or 0)+1)%32; g3Recalc(m)
+      elseif row.kind=="ev" then m.evs[row.key]=((tonumber(m.evs[row.key]) or 0)+1)%256; g3Recalc(m)
+      elseif row.kind=="max_iv" then for _,k in ipairs({"hp","atk","def","spe","spa","spd"}) do m.ivs[k]=31 end; g3Recalc(m)
+      elseif row.kind=="max_ev" then for _,k in ipairs({"hp","atk","def","spe","spa","spd"}) do m.evs[k]=255 end; g3Recalc(m)
+      elseif row.kind=="zero_ev" then for _,k in ipairs({"hp","atk","def","spe","spa","spd"}) do m.evs[k]=0 end; g3Recalc(m)
+      elseif row.kind=="back" then g3Switch("stats_party") end
+      return
+    end
+  end
+
+  local function g3Back()
+    local back={wild="main",species="wild",teleport="main",item="main",item_qty="item",
+      move_party="main",move="move_party",move_slot="move",friend_party="main",
+      friend="friend_party",stats_party="main",stats="stats_party"}
+    if back[G3Menu.mode] then g3Switch(back[G3Menu.mode]) else G3Menu.close() end
+  end
+
+  function G3Menu.handleInput(input)
+    local row=g3Rows()[G3Menu.cursor]
+    if input:wasPressed("up") then G3Menu.cursor=G3Menu.cursor-1
+    elseif input:wasPressed("down") then G3Menu.cursor=G3Menu.cursor+1
+    elseif G3Menu.mode=="species" and input:wasPressed("left") then G3Menu.cursor=G3Menu.cursor-10
+    elseif G3Menu.mode=="species" and input:wasPressed("right") then G3Menu.cursor=G3Menu.cursor+10
+    elseif G3Menu.mode=="item_qty" and row and row.kind=="qty" and input:wasPressed("left") then G3Menu.itemQty=(G3Menu.itemQty+997)%999+1
+    elseif G3Menu.mode=="item_qty" and row and row.kind=="qty" and input:wasPressed("right") then G3Menu.itemQty=G3Menu.itemQty%999+1
+    elseif G3Menu.mode=="stats" and row and row.kind=="iv" and input:wasPressed("left") then
+      local m=g3Party()[G3Menu.selectedParty]; m.ivs[row.key]=((tonumber(m.ivs[row.key]) or 0)+31)%32; g3Recalc(m)
+    elseif G3Menu.mode=="stats" and row and row.kind=="ev" and input:wasPressed("left") then
+      local m=g3Party()[G3Menu.selectedParty]; m.evs[row.key]=((tonumber(m.evs[row.key]) or 0)+255)%256; g3Recalc(m)
+    elseif input:wasPressed("a") then g3Activate()
+    elseif input:wasPressed("b") or input:wasPressed("start") then g3Back() end
+    g3Clamp()
+  end
+
+  local G3_TITLES={main="GAMESHARK G3",wild="WILD POKEMON",species="CHOOSE POKEMON",
+    teleport="TELEPORT",item="GIVE ITEM",item_qty="ITEM QUANTITY",
+    move_party="CHOOSE POKEMON",move="TEACH MOVE",move_slot="REPLACE MOVE",
+    friend_party="CHOOSE POKEMON",friend="FRIENDSHIP",
+    stats_party="CHOOSE POKEMON",stats="IV / EV EDITOR"}
+
+  function G3Menu.draw()
+    if not G3Menu.open then return end
+    local Window=require("src.ui.game3.window")
+    local Font=require("src.ui.game3.frlg_font")
+    local Chrome=require("src.ui.game3.chrome")
+    love.graphics.setColor(0,0,0,1)
+    love.graphics.rectangle("fill",0,0,240,160)
+    love.graphics.setColor(1,1,1,1)
+    Chrome.fixedStdFrame(1,1,28,3)
+    Window.printPx(G3_TITLES[G3Menu.mode] or "GAMESHARK G3",16,12,{colors=Font.COLOR.NORMAL})
+    Window.userFrame(Window.template(1,5,28,14),0)
+
+    g3Clamp()
+    local list=g3Rows()
+    for slot=1,7 do
+      local i=G3Menu.scroll+slot
+      local row=list[i]
+      if not row then break end
+      local y=45+(slot-1)*14
+      if i==G3Menu.cursor then Window.cursorPx(10,y) end
+      Window.printPx(row.label or "",18,y,{colors=Font.COLOR.NORMAL,maxWidth=156})
+      local value=row.value or ""
+      if value~="" then Window.printPx(tostring(value),180,y,{colors=Font.COLOR.NORMAL,maxWidth=48}) end
+    end
+  end
+
   mod.exports.hasFriendship=function(game) return hasFriendshipFeature(game or mod.game) end
   mod.exports.getFriendship=function(mon,game) return friendshipValue(game or mod.game,mon) end
   mod.exports.setFriendship=function(mon,value,game) return setFriendship(game or mod.game,mon,value) end
@@ -2895,11 +3332,12 @@ return function(mod)
     local entry={
       id="gameshark",
       label="GAMESHARK",
-      onSelect=function(liveGame,_session)
-        -- FireRed passes its live Game3 service object here.  Do not assume it
-        -- has the Gen 1/2 Game.stack field; pushScreen() routes FireRed to the
-        -- native src.ui.game3.stack module.
-        pushScreen(liveGame or game,MAIN_SCREEN)
+      onSelect=function(liveGame,session)
+        if isGen3(liveGame or game) then
+          G3Menu.show(liveGame or game,session)
+        else
+          pushScreen(liveGame or game,MAIN_SCREEN)
+        end
       end
     }
 
