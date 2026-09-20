@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.8.9
+# GameShark Compatibility v0.9.0
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -15,6 +15,23 @@ GameShark Compatibility is a standalone GameShark-style cheat and debug menu for
 
 
 
+
+
+## FireRed full noclip — v0.9.0
+
+Video testing showed that v0.8.9 was successfully crossing ordinary FireRed
+collision (trees, water, fences, solid tiles), but the remaining stop occurred
+at the **outer map boundary**. That is not a normal wall/tile collision.
+
+v0.9.0 keeps FireRed's normal connection/warp handling first. If FireRed has
+already tried the map edge and returns `blocked, "bounds"` because there is no
+valid connection, Walk Through Walls now falls back to Game3's native
+`Player.scriptStep()` and crosses the boundary as full noclip.
+
+This makes the cheat behave more like an unrestricted GameShark walk-through-
+walls code. Walking outside the authored map area can expose blank/undefined
+space, so the safest way back is to return through the same edge or use the
+GameShark Teleport command.
 
 ## FireRed Walk Through Walls completion — v0.8.9
 
@@ -186,7 +203,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.8.9.zip
+GameShark-0.9.0.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -457,7 +474,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.8.9.zip
+GameShark-0.9.0.zip
 ```
 
 ## Development notes

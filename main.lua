@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.8.9
+-- GameShark Compatibility 0.9.0
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -1583,14 +1583,21 @@ return function(mod)
     -- canEnter (ledge/special movement and other field-specific blockers).
     -- Add a final player-only fallback: if native movement returns "blocked",
     -- use Player.scriptStep(), which is the engine's own forced one-cell step
-    -- and explicitly skips collision.  Preserve map bounds/connections.
+    -- and explicitly skips collision. Native connections/warps are attempted
+    -- first; if none exists, Walk Through Walls is allowed to cross the map
+    -- boundary as a true full-noclip fallback.
     if type(P.tryMove)=="function" and not P._gamesharkTryMoveWrapped then
       local originalTryMove=P.tryMove
       P.tryMove=function(dir,game,run)
         local result,reason=originalTryMove(dir,game,run)
-        if enabled("walk") and result=="blocked" and reason~="bounds" then
+        if enabled("walk") and result=="blocked" then
+          -- If reason == "bounds", the native tryMove path has already tried
+          -- any valid outdoor map connection/warp.  Reaching this point means
+          -- there is no real connection, so this is the final "full noclip"
+          -- fallback that lets the player cross the decorative map edge too.
           if P.scriptStep and P.scriptStep(dir) then
-            return "step","gameshark_walk"
+            return "step",reason=="bounds" and "gameshark_noclip_bounds"
+              or "gameshark_walk"
           end
         end
         return result,reason

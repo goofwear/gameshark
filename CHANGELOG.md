@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0] - 2026-09-20
+
+### Fixed
+- Completed FireRed Walk Through Walls based on video testing.
+- The remaining blocked area was an outer map boundary rather than ordinary
+  tile/entity collision.
+- Native map connections and warps are still attempted first.
+- If FireRed returns `blocked, "bounds"` with no valid connection, GameShark
+  now uses the native `Player.scriptStep()` fallback to cross the edge.
+- This provides full noclip behavior while preserving real route connections.
+
+
 ## [0.8.9] - 2026-09-20
 
 ### Fixed
