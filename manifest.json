@@ -1,7 +1,7 @@
 {
   "id": "GameShark",
   "name": "GameShark Compatibility",
-  "version": "0.7.10",
+  "version": "0.8.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
@@ -9,12 +9,13 @@
   "game_version": ">=0.1.79 || =0.0.0-dev",
   "games": [
     "gen1",
-    "gen2"
+    "gen2",
+    "gen3"
   ],
   "priority": 100,
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat and debug menu for Gen1Recomp Red, Blue, Yellow, Gold, Silver and Crystal. v0.7.10 fixes Gen 1 Safari Ball/Time refills and Red trainer-Pokemon stealing, and includes Friendship editing, Teach Move, Give Item, Teleport, DV/EV editing, Wild Pokemon controls, Instant Battle, and Crystal Celebi event activation.",
+  "description": "Universal GameShark-style cheat/debug menu for Gen1Recomp Gen 1, Gen 2 and Gen 3 FireRed. v0.8.0 adds FireRed support, Gen 3 IV/EV editing, wild Nature/Max-IV controls, Easy Catch, Complete Dex, Give Item, Teach Move and FireRed teleport destinations.",
   "github": "goofwear/gameshark"
 }

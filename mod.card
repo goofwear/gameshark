@@ -1,11 +1,11 @@
 return {
-  summary = "Universal GameShark-style cheats for Gen1Recomp Gen 1 and Gen 2.",
+  summary = "Universal GameShark-style cheats for Gen1Recomp Gen 1, Gen 2, and Gen 3 FireRed.",
   author = "goofwear",
-  tags = { "tool", "gameshark", "cheats", "gen1", "gen2" },
+  tags = { "tool", "gameshark", "cheats", "gen1", "gen2", "gen3", "firered" },
   differences = {
-    changed = { "One GAMESHARK menu automatically adapts to Red/Blue/Yellow or Gold/Silver/Crystal." },
-    added = { "Pokemon Gold/Silver/Crystal / Gen 2 support", "Per-generation save handling", "Universal wild Pokemon picker" },
-    known = { "Safari cheats are Gen 1 only.", "Gen 2 support targets Gen1Recomp 0.1.79+ and current dev API." }
+    changed = { "One GAMESHARK menu automatically adapts to Gen 1, Gen 2, or FireRed / Gen 3." },
+    added = { "Pokemon Gold/Silver/Crystal / Gen 2 support", "Pokemon FireRed / Gen 3 support", "Per-generation save handling", "Universal wild Pokemon picker", "FireRed IV/EV editor, Nature/Max-IV wild controls, Easy Catch and Complete Dex" },
+    known = { "Safari cheats are Gen 1 only.", "Steal Trainer and Surfboard remain Gen 1/2 only until safe FireRed-native implementations are available.", "Gen 2/3 support targets Gen1Recomp current Mod API 2." }
   },
   compat = { engine = ">=0.1.79 || =0.0.0-dev", modApi = 2 },
 }

@@ -1,5 +1,5 @@
--- GameShark Compatibility 0.7.10
--- Universal Gen 1 + Gen 2 build for Gen1Recomp 0.1.79+.
+-- GameShark Compatibility 0.8.0
+-- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
 
@@ -19,9 +19,18 @@ local MOVE_PICK_SCREEN = "GameSharkMovePick"
 local MOVE_SLOT_SCREEN = "GameSharkMoveSlot"
 local FRIENDSHIP_SCREEN = "GameSharkFriendship"
 local FRIENDSHIP_ACTION_SCREEN = "GameSharkFriendshipAction"
+local G3_STAT_SCREEN = "GameSharkGen3StatEdit"
+local G3_VALUE_SCREEN = "GameSharkGen3ValuePick"
 
 local GENDER_CHOICES = { "random", "male", "female" }
 local SHINY_CHOICES = { "random", "yes", "no" }
+local NATURE_CHOICES = {
+  "random","hardy","lonely","brave","adamant","naughty",
+  "bold","docile","relaxed","impish","lax",
+  "timid","hasty","serious","jolly","naive",
+  "modest","mild","quiet","bashful","rash",
+  "calm","gentle","sassy","careful","quirky",
+}
 
 local CHEATS = {
   { name="WALL WALK", effect="walk", gen1="010138CD", gold="010AA3CE" },
@@ -36,11 +45,13 @@ local CHEATS = {
   { name="ALL BADGES", effect="badges", gen1="01FF56D3", gold="01FF7CD5" },
   { name="ONE HIT KO", effect="enemy_hp", gen1="0100E7CF", gold="010000D1" },
   { name="BURN FOE", effect="enemy_burn", gen1="0170E9CF", gold="0100ADD7" },
-  { name="SAFARI BALL", effect="safari_balls", gen1="016447DA", gen2=false },
-  { name="SAFARI TIME", effect="safari_time", gen1="01F00ED7", gen2=false },
-  { name="STEAL TRAINER", effect="steal_trainer", gen1="010157D0", gold="010116D1" },
+  { name="SAFARI BALL", effect="safari_balls", gen1="016447DA", gen2=false, gen3=false },
+  { name="SAFARI TIME", effect="safari_time", gen1="01F00ED7", gen2=false, gen3=false },
+  { name="STEAL TRAINER", effect="steal_trainer", gen1="010157D0", gold="010116D1", gen3=false },
   { name="WILD PICK", effect="wild_pick", gen1="01FF00D0", gold="01??EDD0" },
-  { name="PAY DAY FIX", effect="payday_fix", gen1=false, gold=nil, gen2only=true },
+  { name="PAY DAY FIX", effect="payday_fix", gen1=false, gold=nil, gen2only=true, gen3=false },
+  { name="CATCH EASY", effect="catch_easy", gen1=false, gold=false, gen3only=true },
+  { name="COMPLETE DEX", effect="complete_dex", gen1=false, gold=false, gen3only=true },
 }
 
 local GEN1_BADGES = {
@@ -53,6 +64,19 @@ local KANTO_BADGES = { "BOULDER","CASCADE","THUNDER","RAINBOW","SOUL","MARSH","V
 local function isGen2(game)
   local s=game and game.save
   return s and s.generation==2 or false
+end
+
+local function isGen3(game)
+  local s=game and game.save
+  return s and s.generation==3 or false
+end
+
+local function cheatSupported(c,game)
+  local g2=isGen2(game)
+  local g3=isGen3(game)
+  if g3 then return c.gen3~=false and c.gen2only~=true end
+  if g2 then return c.gen2~=false and c.gen3only~=true end
+  return c.gen2only~=true and c.gen3only~=true and c.gen1~=false
 end
 
 -- Crystal-only capability probe. Gold and Silver do not contain the GS Ball
@@ -73,7 +97,8 @@ end
 return function(mod)
   local state = {
     active={}, selectedSpecies="PIKACHU",
-    wildGender="random", wildShiny="random",
+    wildGender="random", wildShiny="random", wildNature="random",
+    wildMaxIVs=false,
     wildLevel=nil, -- nil = AUTO / preserve the game's normal encounter level
     pendingWild=nil,
   }
@@ -95,6 +120,8 @@ return function(mod)
     moveSlotIndex = 1, moveSlotScroll = 0,
     friendshipIndex = 1, friendshipScroll = 0,
     friendshipActionIndex = 1, friendshipActionScroll = 0,
+    g3StatIndex = 1, g3StatScroll = 0,
+    g3ValueIndex = 1, g3ValueScroll = 0,
   }
 
   local friendshipEditor = {
@@ -121,6 +148,8 @@ return function(mod)
     dvKey = nil,
     evKey = nil,
     hexDigits = {0,0,0,0},
+    g3Kind = nil,
+    g3Key = nil,
   }
 
   -- Warp on the frame after the Teleport menu closes. Gold otherwise begins
@@ -140,6 +169,8 @@ return function(mod)
        and mod.save.wildLevel>=1 and mod.save.wildLevel<=100 then
       state.wildLevel=math.floor(mod.save.wildLevel)
     end
+    if type(mod.save.wildNature)=="string" then state.wildNature=mod.save.wildNature end
+    if type(mod.save.wildMaxIVs)=="boolean" then state.wildMaxIVs=mod.save.wildMaxIVs end
     -- migrate v0.4.x code-keyed state
     if type(mod.save.active)=="table" then
       for _,c in ipairs(CHEATS) do
@@ -163,6 +194,8 @@ return function(mod)
       mod.save.wildGender=state.wildGender
       mod.save.wildShiny=state.wildShiny
       mod.save.wildLevel=state.wildLevel
+      mod.save.wildNature=state.wildNature
+      mod.save.wildMaxIVs=state.wildMaxIVs
     end
   end
   local function enabled(effect) return state.active[effect]==true end
@@ -199,7 +232,7 @@ return function(mod)
   local function hasFriendshipFeature(game)
     local save=game and game.save
     if not save then return false end
-    if save.generation==2 then return true end
+    if save.generation==2 or save.generation==3 then return true end
     return save.pikachuHappiness ~= nil
   end
 
@@ -214,8 +247,8 @@ return function(mod)
     if isYellowFriendship(game) then
       return math.max(0,math.min(255,math.floor(tonumber(save.pikachuHappiness) or 90)))
     end
-    if save.generation==2 and type(mon)=="table" and mon.isEgg~=true then
-      return math.max(0,math.min(255,math.floor(tonumber(mon.happiness) or 70)))
+    if (save.generation==2 or save.generation==3) and type(mon)=="table" and mon.isEgg~=true then
+      return math.max(0,math.min(255,math.floor(tonumber(mon.happiness or mon.friendship) or 70)))
     end
     return nil
   end
@@ -233,10 +266,11 @@ return function(mod)
       return true,value
     end
 
-    if save.generation==2 then
+    if save.generation==2 or save.generation==3 then
       if type(mon)~="table" then return false,"Pokemon unavailable" end
       if mon.isEgg==true then return false,"Eggs do not use friendship" end
       mon.happiness=value
+      if save.generation==3 then mon.friendship=value end
       return true,value
     end
     return false,"friendship unsupported"
@@ -250,11 +284,12 @@ return function(mod)
   end
 
   local function ensureItem(save,id,qty)
-    save.inventory=save.inventory or {}
+    if not (save and save.inventory) then return end
     if (save.inventory[id] or 0)<qty then save.inventory[id]=qty end
 
-    -- Both generations use bagOrder in current Gen1Recomp. Gen 2 then buckets
-    -- the same flat inventory into ITEM / BALL / KEY_ITEM / TM_HM pockets.
+    -- FireRed's inventory is a live Bag proxy with its own pocket/order logic.
+    if save.generation==3 then return end
+
     save.bagOrder=save.bagOrder or {}
     local found=false
     for _,v in ipairs(save.bagOrder) do
@@ -265,27 +300,26 @@ return function(mod)
 
   local function addItemToBag(game,id,qty)
     local save=game and game.save
-    if not (save and id) then return false,"save unavailable" end
-    save.inventory=save.inventory or {}
-    save.bagOrder=save.bagOrder or {}
-
+    if not (save and save.inventory and id) then return false,"save unavailable" end
     local def=game and game.data and game.data.items and game.data.items[id]
     local pocket=(def and def.pocket) or "ITEM"
-
-    -- Gen 2 key items and HMs are unique inventory entries. Keep those at one
-    -- copy even if a larger quantity somehow reaches this helper.
-    local unique = pocket=="KEY_ITEM"
-      or (pocket=="TM_HM" and tostring(id):sub(1,3)=="HM_")
-
     local add=math.max(1,math.min(99,math.floor(tonumber(qty) or 1)))
     local cur=tonumber(save.inventory[id]) or 0
+
+    if isGen3(game) then
+      local unique = pocket=="KEY_ITEMS"
+      local target=unique and 1 or math.min(999,cur+add)
+      save.inventory[id]=target
+      return true,target
+    end
+
+    local unique = pocket=="KEY_ITEM" or pocket=="KEY_ITEMS"
+      or (pocket=="TM_HM" and tostring(id):sub(1,3)=="HM_")
     local target=unique and 1 or math.min(99,cur+add)
     save.inventory[id]=target
-
+    save.bagOrder=save.bagOrder or {}
     local found=false
-    for _,v in ipairs(save.bagOrder) do
-      if v==id then found=true break end
-    end
+    for _,v in ipairs(save.bagOrder) do if v==id then found=true break end end
     if not found then table.insert(save.bagOrder,id) end
     return true,target
   end
@@ -294,45 +328,40 @@ return function(mod)
     local rows={}
     local items=game and game.data and game.data.items or {}
 
-    for id,def in pairs(items) do
-      -- Gen 2's decoded tables may expose auxiliary/alias entries alongside
-      -- the canonical symbolic item records. Inventory keys throughout
-      -- Gen1Recomp are symbolic strings, so only those are valid Give Item
-      -- candidates. This also prevents mixed number/string keys from reaching
-      -- Lua's relational operators during sorting.
-      if type(id)=="string" and type(def)=="table" then
-        local name=def.name
-        local index=def.index
-        local pocket=def.pocket or "ITEM"
-        local upper=id:upper()
-
-        local giveable = type(name)=="string" and name~=""
-          and upper~="NO_ITEM"
-          and upper~="TERU_SAMA"
-          and not upper:find("BADGE",1,true)
-
-        if giveable then
-          rows[#rows+1]={
-            id=id,
-            name=name,
-            index=type(index)=="number" and index or 99999,
-            pocket=type(pocket)=="string" and pocket or "ITEM",
-          }
+    if isGen3(game) then
+      -- Gen3Compat data tables are lookup proxies; pairs() intentionally does
+      -- not enumerate them. FireRed item ids are numeric, so scan the legal
+      -- range through the public lookup facade.
+      for id=1,512 do
+        local def=items[id]
+        if type(def)=="table" and type(def.name)=="string" and def.name~=""
+           and not tostring(def.name):upper():find("ITEM ",1,true) then
+          rows[#rows+1]={id=id,name=def.name,index=id,pocket=def.pocket or "ITEMS"}
+        end
+      end
+    else
+      for id,def in pairs(items) do
+        if type(id)=="string" and type(def)=="table" then
+          local name=def.name
+          local index=def.index
+          local pocket=def.pocket or "ITEM"
+          local upper=id:upper()
+          local giveable = type(name)=="string" and name~=""
+            and upper~="NO_ITEM" and upper~="TERU_SAMA"
+            and not upper:find("BADGE",1,true)
+          if giveable then rows[#rows+1]={
+            id=id,name=name,index=type(index)=="number" and index or 99999,
+            pocket=type(pocket)=="string" and pocket or "ITEM"}
+          end
         end
       end
     end
 
     table.sort(rows,function(a,b)
-      local ai=tonumber(a.index) or 99999
-      local bi=tonumber(b.index) or 99999
+      local ai=tonumber(a.index) or 99999; local bi=tonumber(b.index) or 99999
       if ai~=bi then return ai<bi end
-
-      local an=tostring(a.name or a.id or "")
-      local bn=tostring(b.name or b.id or "")
+      local an=tostring(a.name or a.id or ""); local bn=tostring(b.name or b.id or "")
       if an~=bn then return an<bn end
-
-      -- tostring is intentional: never allow heterogeneous IDs to raise
-      -- "attempt to compare number with string" on Gen 2.
       return tostring(a.id)<tostring(b.id)
     end)
     return rows
@@ -351,34 +380,32 @@ return function(mod)
     local rows={}
     local moves=game and game.data and game.data.moves or {}
     local known={}
-    for _,mv in ipairs((mon and mon.moves) or {}) do
-      if type(mv)=="table" and type(mv.id)=="string" then known[mv.id]=true end
-    end
-
-    for id,def in pairs(moves) do
-      if type(id)=="string" and type(def)=="table"
-         and type(def.name)=="string" and def.name~="" then
-        local upper=id:upper()
-        if upper~="NO_MOVE" and upper~="NONE" and not upper:find("UNUSED",1,true) then
-          rows[#rows+1]={
-            id=id,
-            name=def.name,
-            index=type(def.index)=="number" and def.index or 99999,
-            pp=tonumber(def.pp) or 0,
-            known=known[id]==true,
-          }
+    if isGen3(game) then
+      for _,id in ipairs((mon and mon.moves) or {}) do if type(id)=="number" then known[id]=true end end
+      for id=1,512 do
+        local def=moves[id]
+        if type(def)=="table" and type(def.name)=="string" and def.name~="" then
+          rows[#rows+1]={id=id,name=def.name,index=id,pp=tonumber(def.pp) or 0,known=known[id]==true}
+        end
+      end
+    else
+      for _,mv in ipairs((mon and mon.moves) or {}) do
+        if type(mv)=="table" and type(mv.id)=="string" then known[mv.id]=true end
+      end
+      for id,def in pairs(moves) do
+        if type(id)=="string" and type(def)=="table" and type(def.name)=="string" and def.name~="" then
+          local upper=id:upper()
+          if upper~="NO_MOVE" and upper~="NONE" and not upper:find("UNUSED",1,true) then
+            rows[#rows+1]={id=id,name=def.name,index=type(def.index)=="number" and def.index or 99999,
+              pp=tonumber(def.pp) or 0,known=known[id]==true}
+          end
         end
       end
     end
-
     table.sort(rows,function(a,b)
-      local ai=tonumber(a.index) or 99999
-      local bi=tonumber(b.index) or 99999
+      local ai=tonumber(a.index) or 99999; local bi=tonumber(b.index) or 99999
       if ai~=bi then return ai<bi end
-      local an=tostring(a.name or a.id or "")
-      local bn=tostring(b.name or b.id or "")
-      if an~=bn then return an<bn end
-      return tostring(a.id)<tostring(b.id)
+      return tostring(a.name or a.id)<tostring(b.name or b.id)
     end)
     return rows
   end
@@ -389,32 +416,24 @@ return function(mod)
   end
 
   local function setMoveSlot(game,mon,slot,moveId)
-    if not (game and mon and type(slot)=="number" and slot>=1 and slot<=4) then
-      return false,"invalid slot"
-    end
+    if not (game and mon and type(slot)=="number" and slot>=1 and slot<=4) then return false,"invalid slot" end
     local def=game.data and game.data.moves and game.data.moves[moveId]
     if type(def)~="table" then return false,"unknown move" end
+    local base=math.max(0,math.floor(tonumber(def.pp) or 0))
+
+    if isGen3(game) then
+      mon.moves=mon.moves or {}; mon.pp=mon.pp or {}; mon.maxPp=mon.maxPp or {}
+      mon.moves[slot]=tonumber(moveId) or moveId
+      mon.pp[slot]=base; mon.maxPp[slot]=base
+      return true
+    end
 
     mon.moves=mon.moves or {}
-
-    -- A GameShark-taught move is a fresh move: full base PP and no inherited
-    -- PP Ups from whatever move previously occupied the slot.
-    local base=math.max(0,math.floor(tonumber(def.pp) or 0))
-    local entry={ id=moveId, pp=base }
-
-    -- Gen 2 stores maxPp on the move instance. Keeping it on Gen 1 is harmless,
-    -- but only add it where the current save is actually Gen 2.
+    local entry={id=moveId,pp=base}
     if isGen2(game) then entry.maxPp=base end
-
     mon.moves[slot]=entry
-
-    -- Ensure compact sequential slots. This matters if an old/debug save had
-    -- a hole in its move table.
     local compact={}
-    for i=1,4 do
-      local mv=mon.moves[i]
-      if type(mv)=="table" and mv.id then compact[#compact+1]=mv end
-    end
+    for i=1,4 do local mv=mon.moves[i]; if type(mv)=="table" and mv.id then compact[#compact+1]=mv end end
     mon.moves=compact
     return true
   end
@@ -422,24 +441,30 @@ return function(mod)
   local function teachMove(game,mon,moveId)
     if not (game and mon and moveId) then return false,"missing target" end
     mon.moves=mon.moves or {}
+    if isGen3(game) then
+      local id=tonumber(moveId)
+      for i,mv in ipairs(mon.moves) do
+        if tonumber(mv)==id then
+          local def=game.data.moves[id]; local base=def and tonumber(def.pp) or 0
+          mon.pp=mon.pp or {}; mon.maxPp=mon.maxPp or {}; mon.pp[i]=base; mon.maxPp[i]=base
+          return true,"known"
+        end
+      end
+      if #mon.moves<4 then return setMoveSlot(game,mon,#mon.moves+1,id) end
+      return false,"full"
+    end
 
-    -- Never create duplicate move slots. Selecting an already-known move just
-    -- restores its PP and treats the operation as successful.
     for _,mv in ipairs(mon.moves) do
       if mv.id==moveId then
         local def=game.data and game.data.moves and game.data.moves[moveId]
         local base=def and tonumber(def.pp) or 0
         local bonus=math.floor((base or 0)/5)*(mv.ppUps or 0)
-        local max=math.max(0,(base or 0)+bonus)
-        mv.pp=max
+        local max=math.max(0,(base or 0)+bonus); mv.pp=max
         if isGen2(game) then mv.maxPp=max end
         return true,"known"
       end
     end
-
-    if #mon.moves<4 then
-      return setMoveSlot(game,mon,#mon.moves+1,moveId)
-    end
+    if #mon.moves<4 then return setMoveSlot(game,mon,#mon.moves+1,moveId) end
     return false,"full"
   end
 
@@ -450,29 +475,31 @@ return function(mod)
       maxPP=mv.maxPp
       if not maxPP then
         local def=game and game.data and game.data.moves and game.data.moves[mv.id]
-        if def and def.pp then
-          local bonus=math.min(math.floor(def.pp/5),7)
-          maxPP=def.pp+(mv.ppUps or 0)*bonus
-          mv.maxPp=maxPP
-        end
+        if def and def.pp then local bonus=math.min(math.floor(def.pp/5),7); maxPP=def.pp+(mv.ppUps or 0)*bonus; mv.maxPp=maxPP end
       end
     else
       local def=game and game.data and game.data.moves and game.data.moves[mv.id]
-      if def and def.pp then
-        maxPP=def.pp+(mv.ppUps or 0)*math.floor(def.pp/5)
-      end
+      if def and def.pp then maxPP=def.pp+(mv.ppUps or 0)*math.floor(def.pp/5) end
     end
     if maxPP and maxPP>0 then mv.pp=maxPP end
   end
 
   local function refillMonPP(game,mon,gold)
     if type(mon)~="table" or type(mon.moves)~="table" then return end
+    if isGen3(game) then
+      mon.pp=mon.pp or {}; mon.maxPp=mon.maxPp or {}
+      for i,id in ipairs(mon.moves) do
+        local def=game.data and game.data.moves and game.data.moves[id]
+        local max=tonumber(mon.maxPp[i]) or (def and tonumber(def.pp)) or 0
+        if max>0 then mon.maxPp[i]=max; mon.pp[i]=max end
+      end
+      return
+    end
     for _,mv in ipairs(mon.moves) do refillMovePP(game,mv,gold) end
   end
 
-  -- Keep both the save-party copy and the currently active battle copy full.
-  -- Gen 1 uses a battler.curMoves working set; Gold battles directly reference
-  -- the active party mon's moves.
+  local activeGen3Battle=nil
+
   local function refillPlayerPP(game)
     if not game then return end
     local gold=isGen2(game)
@@ -481,7 +508,10 @@ return function(mod)
       for _,mon in ipairs(save.party) do refillMonPP(game,mon,gold) end
     end
 
-    if gold then
+    if isGen3(game) then
+      local active=activeGen3Battle and activeGen3Battle.player and activeGen3Battle.player.mon
+      if active then refillMonPP(game,active,false) end
+    elseif gold then
       for _,screen in ipairs(goldBattleScreens(game)) do
         local battle=screen.battle
         if battle then
@@ -504,7 +534,10 @@ return function(mod)
   end
 
   local function grantBadges(save)
-    if save.generation==2 then
+    if save.generation==3 then
+      local flags=save.flags
+      if flags then for i=1,8 do flags[string.format("FLAG_BADGE%02d_GET",i)]=true end end
+    elseif save.generation==2 then
       save.player=save.player or {}
       save.player.badges=save.player.badges or {}
       save.player.kantoBadges=save.player.kantoBadges or {}
@@ -618,7 +651,11 @@ return function(mod)
   end
 
   local function burnEnemy(game)
-    if isGen2(game) then
+    if isGen3(game) then
+      local b=activeGen3Battle and activeGen3Battle.enemy
+      if b and not b.status then b.status="BRN" end
+      if b and b.mon and not b.mon.status then b.mon.status="BRN" end
+    elseif isGen2(game) then
       for _,s in ipairs(goldBattleScreens(game)) do
         local mon=s.battle and s.battle.enemy
         -- Gen 2 stores the full status id ("burn"), while Gen 1 stores "BRN".
@@ -685,10 +722,13 @@ return function(mod)
     local level=state.wildLevel
     local gold=isGen2(game)
 
-    -- Gold's Mon constructor runs shiny.roll/gender.roll while the Gen-2
+    -- Gen 2 finalizes DVs through its constructor; Gen 3 identity options are
+    -- finalized against the live enemy mon when battle.started fires.
+    -- Gold Mon constructor  runs shiny.roll/gender.roll while the Gen-2
     -- start_battle script verb constructs the enemy. Reuse the same pending
     -- identity marker as normal Wild Pick so Gender/Shiny apply here too.
-    if gold and (state.wildGender~="random" or state.wildShiny~="random") then
+    if (gold or isGen3(game)) and (state.wildGender~="random" or state.wildShiny~="random"
+       or state.wildNature~="random" or state.wildMaxIVs) then
       state.pendingWild={ species=state.selectedSpecies, level=level }
     end
 
@@ -907,7 +947,29 @@ return function(mod)
 
   local function teleportRows(game)
     local rows={}
-    if isGen2(game) then
+    if isGen3(game) then
+      local g3={
+        {"PALLET TOWN","FR_PLAYERS_HOUSE_1F",8,5},
+        {"VIRIDIAN CITY","FR_VIRIDIAN_CITY_POKEMON_CENTER_1F",7,4},
+        {"PEWTER CITY","FR_PEWTER_CITY_POKEMON_CENTER_1F",7,4},
+        {"CERULEAN CITY","FR_CERULEAN_CITY_POKEMON_CENTER_1F",7,4},
+        {"LAVENDER TOWN","FR_LAVENDER_TOWN_POKEMON_CENTER_1F",7,4},
+        {"VERMILION CITY","FR_VERMILION_CITY_POKEMON_CENTER_1F",7,4},
+        {"CELADON CITY","FR_CELADON_CITY_POKEMON_CENTER_1F",7,4},
+        {"FUCHSIA CITY","FR_FUCHSIA_CITY_POKEMON_CENTER_1F",7,4},
+        {"CINNABAR ISLAND","FR_CINNABAR_ISLAND_POKEMON_CENTER_1F",7,4},
+        {"SAFFRON CITY","FR_SAFFRON_CITY_POKEMON_CENTER_1F",7,4},
+        {"INDIGO PLATEAU","FR_INDIGO_PLATEAU_POKEMON_CENTER_1F",13,12},
+        {"ONE ISLAND","SEVII_ONE_ISLAND_POKECENTER",5,4},
+        {"TWO ISLAND","SEVII_TWO_ISLAND_POKECENTER",7,4},
+        {"THREE ISLAND","SEVII_THREE_ISLAND_POKECENTER",7,4},
+        {"FOUR ISLAND","SEVII_FOUR_ISLAND_POKECENTER",7,4},
+        {"FIVE ISLAND","SEVII_FIVE_ISLAND_POKECENTER",7,4},
+        {"SIX ISLAND","SEVII_SIX_ISLAND_POKECENTER",7,4},
+        {"SEVEN ISLAND","SEVII_SEVEN_ISLAND_POKECENTER",7,4},
+      }
+      for _,r in ipairs(g3) do rows[#rows+1]={label=r[1],mapId=r[2],x=r[3],y=r[4],facing="down"} end
+    elseif isGen2(game) then
       local landmarks=game and game.data and game.data.gen2Landmarks
       local spawns=landmarks and landmarks.spawns or {}
       for _,spawnId in ipairs(GEN2_TELEPORT_SPAWNS) do
@@ -1011,6 +1073,42 @@ return function(mod)
 
   local function refreshEditedMon(game,mon)
     if not (game and mon) then return false end
+    if isGen3(game) then
+      local def=editorSpeciesDef(mon,game)
+      local b=def and def.baseStats
+      if not b then return false end
+      mon.ivs=mon.ivs or {}; mon.evs=mon.evs or {}
+      local iv,ev=mon.ivs,mon.evs
+      local level=math.max(1,tonumber(mon.level) or 1)
+      local nature=math.floor(tonumber(mon.personality) or 0)%25
+      local natureMods = {
+        [0]={}, [1]={attack=1,defense=-1}, [2]={attack=1,speed=-1}, [3]={attack=1,specialAttack=-1}, [4]={attack=1,specialDefense=-1},
+        [5]={defense=1,attack=-1}, [6]={}, [7]={defense=1,speed=-1}, [8]={defense=1,specialAttack=-1}, [9]={defense=1,specialDefense=-1},
+        [10]={speed=1,attack=-1}, [11]={speed=1,defense=-1}, [12]={}, [13]={speed=1,specialAttack=-1}, [14]={speed=1,specialDefense=-1},
+        [15]={specialAttack=1,attack=-1}, [16]={specialAttack=1,defense=-1}, [17]={specialAttack=1,speed=-1}, [18]={}, [19]={specialAttack=1,specialDefense=-1},
+        [20]={specialDefense=1,attack=-1}, [21]={specialDefense=1,defense=-1}, [22]={specialDefense=1,speed=-1}, [23]={specialDefense=1,specialAttack=-1}, [24]={},
+      }
+      local mods=natureMods[nature] or {}
+      local function calc(base,ivv,evv,key,hp)
+        local core=math.floor(((2*(tonumber(base) or 1)+(tonumber(ivv) or 0)+math.floor((tonumber(evv) or 0)/4))*level)/100)
+        if hp then return core+level+10 end
+        local v=core+5
+        if mods[key]==1 then v=math.floor(v*1.1) elseif mods[key]==-1 then v=math.floor(v*0.9) end
+        return v
+      end
+      local oldMax=tonumber(mon.maxHp) or tonumber(mon.hp) or 1
+      local oldHp=tonumber(mon.hp) or oldMax
+      local wasFull=oldHp>=oldMax
+      local hp=calc(b.hp,iv.hp,ev.hp,"hp",true)
+      mon.maxHp=hp; mon.hp=wasFull and hp or math.max(0,math.min(oldHp,hp))
+      mon.attack=calc(b.attack,iv.atk,ev.atk,"attack",false); mon.atk=mon.attack
+      mon.defense=calc(b.defense,iv.def,ev.def,"defense",false); mon.def=mon.defense
+      mon.speed=calc(b.speed,iv.spe,ev.spe,"speed",false); mon.spe=mon.speed
+      mon.spAtk=calc(b.specialAttack,iv.spa,ev.spa,"specialAttack",false); mon.spa=mon.spAtk
+      mon.spDef=calc(b.specialDefense,iv.spd,ev.spd,"specialDefense",false); mon.spd=mon.spDef
+      if mon.happiness~=nil and mon.friendship==nil then mon.friendship=mon.happiness end
+      return true
+    end
     local def=editorSpeciesDef(mon,game)
     if not (def and def.baseStats) then return false end
 
@@ -1152,6 +1250,9 @@ return function(mod)
       if enabled("pp_up") then ensureItem(save,"PP_UP",99) end
       if enabled("infinite_pp") then refillPlayerPP(game) end
       if enabled("badges") then grantBadges(save) end
+      if enabled("complete_dex") and isGen3(game) and save.pokedex then
+        for sp=1,386 do save.pokedex.seen[sp]=true; save.pokedex.caught[sp]=true end
+      end
       if enabled("party_hp") then
         -- Keep slot 1 full outside battle for compatibility with the original
         -- GameShark-style cheat, then also heal the live active battler below.
@@ -1160,7 +1261,10 @@ return function(mod)
           mon.hp=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp
         end
 
-        if isGen2(game) then
+        if isGen3(game) then
+          local active=activeGen3Battle and activeGen3Battle.player and activeGen3Battle.player.mon
+          if active then active.hp=active.maxHp or active.hp end
+        elseif isGen2(game) then
           for _,screen in ipairs(goldBattleScreens(game)) do
             local active=screen.battle and screen.battle.player
             if active then
@@ -1176,7 +1280,7 @@ return function(mod)
           end
         end
       end
-      if not isGen2(game) and save.safari then
+      if not isGen2(game) and not isGen3(game) and save.safari then
         if enabled("safari_balls") then save.safari.balls=99 end
         -- Gen 1 starts the Safari Game at 502 internally and reaches 500
         -- after the two gate steps.  Keep a generous full-session value here
@@ -1186,7 +1290,7 @@ return function(mod)
     end
     if isGen2(game) then
       for _,s in ipairs(goldBattleScreens(game)) do if enabled("steal_trainer") and not s.battle.wild then patchGoldTrainer(s) else unpatchGoldTrainer(s) end end
-    else
+    elseif not isGen3(game) then
       for _,b in ipairs(gen1BattleStates(game)) do
         if enabled("steal_trainer") then patchGen1Trainer(b) else unpatchGen1Trainer(b) end
       end
@@ -1204,7 +1308,7 @@ return function(mod)
     do
       local postSave=game and game.save
       local safari=postSave and postSave.safari
-      if safari and not isGen2(game) then
+      if safari and not isGen2(game) and not isGen3(game) then
         if enabled("safari_balls") then safari.balls=99 end
         if enabled("safari_time") then safari.steps=500 end
       end
@@ -1243,7 +1347,10 @@ return function(mod)
         local mon=save.party[1]
         if mon then mon.hp=mon.maxHp or (mon.stats and mon.stats.hp) or mon.hp end
       end
-      if isGen2(game) then
+      if isGen3(game) then
+        local active=activeGen3Battle and activeGen3Battle.player and activeGen3Battle.player.mon
+        if active then active.hp=active.maxHp or active.hp end
+      elseif isGen2(game) then
         for _,screen in ipairs(goldBattleScreens(game)) do
           local active=screen.battle and screen.battle.player
           if active then active.hp=active.maxHp or (active.stats and active.stats.hp) or active.hp end
@@ -1279,7 +1386,8 @@ return function(mod)
       -- Gold constructs the actual Mon after the encounter roll. Carry these
       -- choices into that next matching build for gender/shiny finalization.
       local game=mod.game
-      if isGen2(game) and (state.wildGender~="random" or state.wildShiny~="random") then
+      if (isGen2(game) or isGen3(game)) and (state.wildGender~="random" or state.wildShiny~="random"
+         or state.wildNature~="random" or state.wildMaxIVs) then
         state.pendingWild={ species=state.selectedSpecies, level=r.level }
       end
     end
@@ -1348,7 +1456,10 @@ return function(mod)
     local playerSide=(ev.side=="player") or (type(user)=="table" and user.isPlayer==true)
     if not playerSide then return end
 
-    if isGen2(game) then
+    if isGen3(game) then
+      local mon=(type(user)=="table" and user.mon) or (battle and battle.player and battle.player.mon)
+      if mon then refillMonPP(game,mon,false) end
+    elseif isGen2(game) then
       refillMonPP(game,user,true)
       if battle then refillMonPP(game,battle.player,true) end
     else
@@ -1359,19 +1470,71 @@ return function(mod)
     end
   end)
 
+  local function applyGen3WildOptions(mon)
+    if not (isGen3(mod.game) and type(mon)=="table") then return end
+    local p=state.pendingWild
+    if not p then return end
+
+    if state.wildMaxIVs then
+      mon.ivs=mon.ivs or {}
+      mon.ivs.hp=31; mon.ivs.atk=31; mon.ivs.def=31
+      mon.ivs.spe=31; mon.ivs.spa=31; mon.ivs.spd=31
+    end
+
+    if state.wildNature~="random" then
+      local want=0
+      for i,v in ipairs(NATURE_CHOICES) do if v==state.wildNature then want=i-2 break end end
+      if want>=0 then
+        local pid=math.floor(tonumber(mon.personality) or 0)
+        pid=pid - (pid % 25) + want
+        mon.personality=pid; mon.nature=want
+      end
+    end
+
+    -- FireRed's presentation layer honors isShiny explicitly when present.
+    if state.wildShiny=="yes" then mon.isShiny=true
+    elseif state.wildShiny=="no" then mon.isShiny=false end
+
+    if state.wildGender=="male" or state.wildGender=="female" then
+      local wanted=state.wildGender=="female" and "F" or "M"
+      local def=selectedDef()
+      local ratio=def and def.genderRatio
+      if ratio~=nil and ratio~=0xff then
+        local pid=math.floor(tonumber(mon.personality) or 0)
+        -- Search a small PID window so nature stays fixed while gender changes.
+        local nature=pid%25
+        for d=0,6400 do
+          local cand=pid+d
+          if cand%25==nature then
+            local low=cand%256
+            local g=(ratio>low) and "F" or "M"
+            if g==wanted then mon.personality=cand; mon.gender=wanted; break end
+          end
+        end
+      end
+    end
+  end
+
   -- battle.started is the authoritative live-battle entry point.  Do not
   -- rely only on scanning game.stack.states: some Gen1Recomp builds/forks
   -- expose the Red battle screen through a different stack shape even though
   -- the battle event still carries the real BattleState.
   mod.events:on("battle.started", function(ev)
     if not ev then return end
+    if isGen3(mod.game) then activeGen3Battle=ev.battle end
 
     if ev.kind=="wild" then
       -- Finalize the actual constructed Gold wild Pokemon after Mon.new has
       -- finished. This keeps its stored shiny/gender and DVs in agreement.
       local battle=ev.battle
       local mon=battle and battle.enemy
-      if mon then applyPendingWildIdentity(mon) end
+      if isGen3(mod.game) then
+        local raw=mon and (mon.mon or mon)
+        if raw then applyGen3WildOptions(raw) end
+        state.pendingWild=nil
+      elseif mon then
+        applyPendingWildIdentity(mon)
+      end
       return
     end
 
@@ -1379,7 +1542,8 @@ return function(mod)
     -- battle starts.  This fixes Red builds where the later stack scan never
     -- discovers the live BattleState.  Gen 2 keeps its separate screen/model
     -- path below.
-    if ev.kind=="trainer" and enabled("steal_trainer") and not isGen2(mod.game) then
+    if ev.kind=="trainer" and enabled("steal_trainer")
+       and not isGen2(mod.game) and not isGen3(mod.game) then
       patchGen1Trainer(ev.battle)
     end
   end)
@@ -1402,6 +1566,7 @@ return function(mod)
   end)
 
   mod.events:on("battle.ended", function(ev)
+    if isGen3(mod.game) then activeGen3Battle=nil end
     if not enabled("payday_fix") then return end
     local game=mod.game
     if not isGen2(game) then return end
@@ -1416,6 +1581,7 @@ return function(mod)
   end)
 
   mod.hooks:wrap("catch.rate", function(next,ball,mon,def,opts)
+    if enabled("catch_easy") and isGen3(mod.game) then return true,4 end
     -- Gold keeps its working compatibility path here.  Gen 1 trainer
     -- stealing is handled directly by the live battle's catchAttempt wrapper.
     if trainerCatchInProgress then return true,255 end
@@ -1473,14 +1639,15 @@ return function(mod)
   mod.exports.parse=parseCode
   mod.exports.game=function(game)
     local save=game and game.save
-    return (save and save.version) or (save and save.generation==2 and "gen2") or "gen1"
+    return (save and save.version) or (save and save.generation==3 and "gen3")
+      or (save and save.generation==2 and "gen2") or "gen1"
   end
   mod.exports.list=function(game)
     local gold=isGen2(game); local out={}
     for _,c in ipairs(CHEATS) do
-      local supported=not ((gold and c.gen2==false)
-        or ((not gold) and c.gen2only==true))
-      out[#out+1]={name=c.name,effect=c.effect,code=gold and c.gold or c.gen1,enabled=enabled(c.effect),supported=supported}
+      local supported=cheatSupported(c,game)
+      local code=gold and c.gold or c.gen1
+      out[#out+1]={name=c.name,effect=c.effect,code=code,enabled=enabled(c.effect),supported=supported}
     end
     return out
   end
@@ -1504,6 +1671,8 @@ return function(mod)
     state.wildGender=value; persist(); return true
   end
   mod.exports.getWildShiny=function() return state.wildShiny end
+  mod.exports.getWildNature=function() return state.wildNature end
+  mod.exports.getWildMaxIVs=function() return state.wildMaxIVs end
   mod.exports.setWildShiny=function(value)
     if value~="random" and value~="yes" and value~="no" then return false,"invalid shiny choice" end
     state.wildShiny=value; persist(); return true
@@ -1608,7 +1777,7 @@ return function(mod)
       },
     }
 
-    if gold then
+    if gold or isGen3(game) then
       items[#items+1]={
         label="GENDER",
         -- N/A is clearer here than printing the long GENDERLESS value into
@@ -1623,6 +1792,10 @@ return function(mod)
         right=state.wildShiny=="random" and "RANDOM" or string.upper(state.wildShiny),
         kind="shiny"
       }
+    if isGen3(game) then
+      items[#items+1]={label="NATURE",right=string.upper(state.wildNature),kind="nature"}
+      items[#items+1]={label="MAX IVS",right=state.wildMaxIVs and "YES" or "NO",kind="max_ivs"}
+    end
     end
 
     items[#items+1]={
@@ -1677,6 +1850,15 @@ return function(mod)
           return
         end
 
+        if item.kind=="nature" then
+          state.wildNature=cycleChoice(state.wildNature,NATURE_CHOICES); persist()
+          current:close(); mod.ui.push(game,WILD_SCREEN); return
+        end
+        if item.kind=="max_ivs" then
+          state.wildMaxIVs=not state.wildMaxIVs; persist()
+          current:close(); mod.ui.push(game,WILD_SCREEN); return
+        end
+
         if item.kind=="instant" then
           -- AUTO has a specific meaning for ordinary encounters, so don't
           -- silently invent an instant-battle level. Send the user straight
@@ -1721,10 +1903,11 @@ return function(mod)
     local items={}
     for slot=1,4 do
       local mv=mon and mon.moves and mon.moves[slot]
-      local def=mv and game.data and game.data.moves and game.data.moves[mv.id]
+      local moveId=isGen3(game) and mv or (type(mv)=="table" and mv.id)
+      local def=moveId and game.data and game.data.moves and game.data.moves[moveId]
       items[#items+1]={
         label="SLOT "..tostring(slot),
-        right=(def and def.name) or (mv and mv.id) or "EMPTY",
+        right=(def and def.name) or tostring(moveId or "EMPTY"),
         slot=slot,
       }
     end
@@ -1781,7 +1964,7 @@ return function(mod)
         uiPos.movePickScroll=current.scroll or uiPos.movePickScroll
 
         local row=item.value
-        if not (type(row)=="table" and type(row.id)=="string") then return end
+        if not (type(row)=="table" and (type(row.id)=="string" or type(row.id)=="number")) then return end
 
         moveEditor.moveId=row.id
         moveEditor.moveName=row.name
@@ -1903,7 +2086,12 @@ return function(mod)
     local items={}
     for _,row in ipairs(rows) do
       local right=""
-      if isGen2(game) then
+      if isGen3(game) then
+        if row.pocket=="POKE_BALLS" then right="BALL"
+        elseif row.pocket=="KEY_ITEMS" then right="KEY"
+        elseif row.pocket=="TM_CASE" then right="TM"
+        elseif row.pocket=="BERRY_POUCH" then right="BERRY" end
+      elseif isGen2(game) then
         if row.pocket=="BALL" then right="BALL"
         elseif row.pocket=="KEY_ITEM" then right="KEY"
         elseif row.pocket=="TM_HM" then right="TM"
@@ -1925,7 +2113,7 @@ return function(mod)
         uiPos.itemPickIndex=current.index or uiPos.itemPickIndex
         uiPos.itemPickScroll=current.scroll or uiPos.itemPickScroll
           local row=item.value
-        if not (type(row)=="table" and type(row.id)=="string") then
+        if not (type(row)=="table" and (type(row.id)=="string" or type(row.id)=="number")) then
           current:close()
           mod.ui.push(game,MAIN_SCREEN)
           return
@@ -2107,12 +2295,66 @@ return function(mod)
         uiPos.partyEditScroll=current.scroll or uiPos.partyEditScroll
         editor.partySlot=item.slot
         current:close()
-        mod.ui.push(game,MON_EDIT_SCREEN)
+        mod.ui.push(game,isGen3(game) and G3_STAT_SCREEN or MON_EDIT_SCREEN)
       end,
       onCancel=function() mod.ui.push(game,MAIN_SCREEN) end
     })
     menu.index=math.max(1,math.min(uiPos.partyEditIndex,math.max(1,#items)))
     menu.scroll=math.max(0,math.min(uiPos.partyEditScroll,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  local G3_STATS = {
+    {key="hp",label="HP"},{key="atk",label="ATK"},{key="def",label="DEF"},
+    {key="spe",label="SPD"},{key="spa",label="SP ATK"},{key="spd",label="SP DEF"},
+  }
+
+  mod.content.screens:register(G3_VALUE_SCREEN,{new=function(game)
+    local mon=getPartyMon(game)
+    local kind=editor.g3Kind; local key=editor.g3Key
+    local max=(kind=="iv") and 31 or 255
+    local tbl=mon and ((kind=="iv") and mon.ivs or mon.evs) or {}
+    local cur=tonumber(tbl and tbl[key]) or 0
+    local items={}
+    for v=0,max do items[#items+1]={label=tostring(v),right=(v==cur) and "*" or "",value=v} end
+    local menu
+    menu=mod.ui.ListMenu.new(game,string.upper(kind or "STAT").." "..string.upper(key or ""),items,{
+      pageJump=true,keyRepeat=true,
+      onChoose=function(item,current)
+        if not (item and mon and key) then return end
+        if kind=="iv" then mon.ivs=mon.ivs or {}; mon.ivs[key]=item.value
+        else mon.evs=mon.evs or {}; mon.evs[key]=item.value end
+        refreshEditedMon(game,mon)
+        current:close(); mod.ui.push(game,G3_STAT_SCREEN)
+      end,
+      onCancel=function() mod.ui.push(game,G3_STAT_SCREEN) end
+    })
+    menu.index=math.max(1,math.min(cur+1,#items)); menu.scroll=math.max(0,math.min(menu.index-1,math.max(0,#items-menu.rows)))
+    return menu
+  end})
+
+  mod.content.screens:register(G3_STAT_SCREEN,{new=function(game)
+    local mon=getPartyMon(game)
+    if not mon then return mod.ui.ListMenu.new(game,"IV / EV EDIT",{},{onCancel=function() mod.ui.push(game,PARTY_EDIT_SCREEN) end}) end
+    mon.ivs=mon.ivs or {}; mon.evs=mon.evs or {}
+    local def=editorSpeciesDef(mon,game)
+    local name=(mon.nickname and mon.nickname~="" and mon.nickname) or (def and def.name) or mon.name or tostring(mon.species)
+    local items={}
+    for _,r in ipairs(G3_STATS) do items[#items+1]={label=r.label.." IV",right=tostring(mon.ivs[r.key] or 0),kind="iv",key=r.key} end
+    for _,r in ipairs(G3_STATS) do items[#items+1]={label=r.label.." EV",right=tostring(mon.evs[r.key] or 0),kind="ev",key=r.key} end
+    items[#items+1]={label="MAX ALL IVS",kind="max_iv"}
+    items[#items+1]={label="MAX ALL EVS",kind="max_ev"}
+    items[#items+1]={label="ZERO ALL EVS",kind="zero_ev"}
+    items[#items+1]={label="BACK",kind="back"}
+    local menu
+    menu=mod.ui.ListMenu.new(game,name,items,{pageJump=true,onChoose=function(item,current)
+      if not item then return end
+      if item.kind=="iv" or item.kind=="ev" then editor.g3Kind=item.kind; editor.g3Key=item.key; current:close(); mod.ui.push(game,G3_VALUE_SCREEN); return end
+      if item.kind=="max_iv" then for _,r in ipairs(G3_STATS) do mon.ivs[r.key]=31 end; refreshEditedMon(game,mon); current:close(); mod.ui.push(game,G3_STAT_SCREEN); return end
+      if item.kind=="max_ev" then for _,r in ipairs(G3_STATS) do mon.evs[r.key]=255 end; refreshEditedMon(game,mon); current:close(); mod.ui.push(game,G3_STAT_SCREEN); return end
+      if item.kind=="zero_ev" then for _,r in ipairs(G3_STATS) do mon.evs[r.key]=0 end; refreshEditedMon(game,mon); current:close(); mod.ui.push(game,G3_STAT_SCREEN); return end
+      if item.kind=="back" then current:close(); mod.ui.push(game,PARTY_EDIT_SCREEN); return end
+    end,onCancel=function() mod.ui.push(game,PARTY_EDIT_SCREEN) end})
     return menu
   end})
 
@@ -2322,10 +2564,9 @@ return function(mod)
   end})
 
   mod.content.screens:register(MAIN_SCREEN,{new=function(game)
-    local gold=isGen2(game); local items={}
+    local gold=isGen2(game); local g3=isGen3(game); local items={}
     for _,c in ipairs(CHEATS) do
-      local supported=not ((gold and c.gen2==false)
-        or ((not gold) and c.gen2only==true))
+      local supported=cheatSupported(c,game)
       -- Wild Pick now has its own self-contained setup screen.
       if supported and c.effect~="wild_pick" then
         items[#items+1]={
@@ -2357,10 +2598,11 @@ return function(mod)
     items[#items+1]={label="TEACH MOVE",right=">",kind="teach_move"}
     items[#items+1]={label="GIVE ITEM",right=">",kind="give_item"}
     items[#items+1]={label="TELEPORT",right=">",kind="teleport"}
-    items[#items+1]={label="DV / EV EDITOR",right=">",kind="party_edit"}
-    items[#items+1]={label="USE SURFBOARD",kind="surfboard"}
+    items[#items+1]={label=g3 and "IV / EV EDITOR" or "DV / EV EDITOR",right=">",kind="party_edit"}
+    if not g3 then items[#items+1]={label="USE SURFBOARD",kind="surfboard"} end
     local menu
-    menu=mod.ui.ListMenu.new(game,gold and "GAMESHARK G2" or "GAMESHARK G1",items,{
+    local title=g3 and "GAMESHARK G3" or (gold and "GAMESHARK G2" or "GAMESHARK G1")
+    menu=mod.ui.ListMenu.new(game,title,items,{
       pageJump=true,
       onChoose=function(item,current)
       if not item then return end

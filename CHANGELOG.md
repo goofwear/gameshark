@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.0] - 2026-09-20
+
+### Added
+- Added `gen3` / Pokemon FireRed support.
+- Added FireRed **Easy Catch** and **Complete Dex** cheats.
+- Added Gen 3 Wild Pokemon **Nature** and **Max IV** controls.
+- Added FireRed-compatible Give Item and unrestricted Teach Move catalogs.
+- Added FireRed Friendship editing.
+- Added a Gen 3 six-stat **IV / EV editor**.
+- Added FireRed Kanto and Sevii teleport destinations using the public warp API.
+
+### Compatibility
+- Existing shared cheats now handle FireRed save/battle models where applicable.
+- Gen 1/2-only entries are hidden on FireRed rather than executing incompatible paths.
+- FireRed item/move catalogs are enumerated through numeric Gen3Compat lookups because
+  the public data facades intentionally do not expose `pairs()` enumeration.
+
+
 ## [0.7.10] - 2026-09-15
 
 ### Fixed

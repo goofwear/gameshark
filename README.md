@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.7.10
+# GameShark Compatibility v0.8.0
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -37,7 +37,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.7.10.zip
+GameShark-0.8.0.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -308,7 +308,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.7.10.zip
+GameShark-0.8.0.zip
 ```
 
 ## Development notes
@@ -318,3 +318,49 @@ GameShark translates GameShark-style effects into Gen1Recomp's supported runtime
 Some original GameShark codes are retained as historical/reference identifiers inside the source, while the actual implementation uses generation-aware engine behavior where needed for stability.
 
 For the complete version-by-version history, see [`CHANGELOG.md`](CHANGELOG.md).
+
+
+## FireRed / Gen 3 support — v0.8.0
+
+GameShark now declares and supports **Gen 3** in current Gen1Recomp builds,
+with FireRed as the first supported Gen 3 game.
+
+### FireRed features
+
+- Walk Through Walls
+- No Random Battles
+- Master Ball x99
+- Rare Candy x99
+- PP Up x99
+- Max Money and Max Game Corner Coins
+- Infinite PP
+- Infinite HP
+- All 8 Kanto Badges
+- One Hit KO
+- Burn Foe
+- **Easy Catch** (guaranteed wild catches)
+- **Complete Dex** (seen + caught)
+- Wild Pokemon picker and level override
+- Wild Shiny control
+- **Wild Nature selector**
+- **Wild Max IVs**
+- Instant Battle
+- Give Item from FireRed's item catalog
+- Unrestricted Teach Move using FireRed's move catalog
+- Friendship editor
+- **Gen 3 IV / EV editor** (six IVs and six EVs)
+- Teleport to Kanto/Sevii Pokemon Center destinations
+
+### Intentionally not exposed on FireRed yet
+
+The legacy **Safari Ball**, **Safari Time**, **Pay Day Fix**, **Surfboard**, and
+**Steal Trainer Pokemon** entries remain generation-specific. In particular,
+trainer-Pokemon capture needs a FireRed-native battle teardown implementation
+before it can be enabled safely without leaving trainer scripts in a bad state.
+
+### Why the FireRed implementation does not write raw GBA addresses
+
+The historical GameShark/Action Replay codes are used as behavior references.
+Inside Gen1Recomp the mod implements the equivalent effects through Mod API 2
+and the Gen 3 compatibility facade, avoiding ROM-revision-specific RAM
+addresses.
