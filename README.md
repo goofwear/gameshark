@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.8.6
+# GameShark Compatibility v0.8.7
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -12,6 +12,19 @@ GameShark Compatibility is a standalone GameShark-style cheat and debug menu for
 
 
 
+
+
+## FireRed Walk Through Walls fix — v0.8.7
+
+FireRed uses its own Game3 player movement path. `Player.tryMove()` calls
+`src.core.game3.collision.canEnter()` directly, so the older
+`movement.collision` wrapper used by GameShark never changed normal FireRed
+walking.
+
+v0.8.7 adds a FireRed-native collision bypass while **Walk Through Walls** is
+enabled. It is scoped to movement checks originating from the live player and
+is restored after each Game3 logic tick. Map bounds are still respected, so
+the player cannot walk outside the loaded map.
 
 ## FireRed cheat execution fix — v0.8.6
 
@@ -130,7 +143,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.8.6.zip
+GameShark-0.8.7.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -401,7 +414,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.8.6.zip
+GameShark-0.8.7.zip
 ```
 
 ## Development notes

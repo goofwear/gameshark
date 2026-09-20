@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.8.6
+-- GameShark Compatibility 0.8.7
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -1542,6 +1542,33 @@ return function(mod)
 
     if isGen3(game) then applyGen3ContinuousEffects() end
 
+    -- FireRed's native Player.tryMove calls game3.collision.canEnter directly.
+    -- The shared movement.collision hook is exposed by the Gen3 compatibility
+    -- facade, but normal Game3 walking does not travel through that facade.
+    -- Patch canEnter only while this Game3 input tick is executing, and only
+    -- when the caller's from-cell is the live player cell.  Preserve map bounds
+    -- so Walk Through Walls cannot walk off the loaded map.
+    local g3Collision,g3CanEnter
+    if isGen3(game) and enabled("walk") then
+      local okC,C=pcall(require,"src.core.game3.collision")
+      local okP,P=pcall(require,"src.core.game3.player")
+      if okC and C and type(C.canEnter)=="function" and okP and P then
+        g3Collision=C
+        g3CanEnter=C.canEnter
+        C.canEnter=function(g,tx,ty,opts)
+          local allowed,reason=g3CanEnter(g,tx,ty,opts)
+          if allowed then return true,nil end
+          opts=opts or {}
+          local fromPlayer=(tonumber(opts.fromX)==tonumber(P.cellX)
+            and tonumber(opts.fromY)==tonumber(P.cellY))
+          if fromPlayer and reason~="bounds" then
+            return true,"gameshark"
+          end
+          return allowed,reason
+        end
+      end
+    end
+
     local save=(not isGen3(game)) and game and game.save or nil
     if save then
       if enabled("cash") then
@@ -1614,7 +1641,11 @@ return function(mod)
     end
     if enabled("enemy_burn") then burnEnemy(game) end
 
-    local result=next(game,dt)
+    local okStep,result=pcall(next,game,dt)
+    if g3Collision and g3CanEnter then
+      g3Collision.canEnter=g3CanEnter
+    end
+    if not okStep then error(result) end
 
     if isGen3(game) then applyGen3ContinuousEffects() end
 

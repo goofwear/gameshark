@@ -1,7 +1,7 @@
 {
   "id": "GameShark",
   "name": "GameShark Compatibility",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "api": 2,
   "entry": "main.lua",
   "profile": "overhaul",
@@ -16,7 +16,7 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Universal GameShark-style cheat and debug menu for Gen1Recomp Gen 1, Gen 2 and FireRed. v0.8.6 fixes FireRed cheat execution by mutating the live Game3 Runtime session instead of the Game3 save snapshot.",
+  "description": "Universal GameShark-style cheat and debug menu for Gen1Recomp Gen 1, Gen 2 and FireRed. v0.8.7 fixes Walk Through Walls on FireRed by bypassing Game3's native collision path for the live player.",
   "github": "goofwear/gameshark",
   "permissions": [
     "engine_internals"

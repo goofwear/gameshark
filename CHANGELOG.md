@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.7] - 2026-09-20
+
+### Fixed
+- Fixed Walk Through Walls on FireRed.
+- FireRed's native `Player.tryMove()` bypasses the compatibility
+  `movement.collision` hook and calls `game3.collision.canEnter()` directly.
+- GameShark now temporarily bypasses non-boundary Game3 collision failures for
+  the live player while Walk Through Walls is enabled.
+- The native collision function is restored after every FireRed logic tick.
+- Map-boundary collision remains enabled to avoid walking outside the loaded map.
+
+
 ## [0.8.6] - 2026-09-20
 
 ### Fixed
