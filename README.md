@@ -1,4 +1,4 @@
-# GameShark Compatibility v0.9.1
+# GameShark Compatibility v0.9.2
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
@@ -17,6 +17,30 @@ GameShark Compatibility is a standalone GameShark-style cheat and debug menu for
 
 
 
+
+
+## FireRed shiny Wild Pokemon fix — v0.9.2
+
+FireRed/Gen 3 does not determine shininess from Gen 2 DVs. A Pokemon is shiny
+when the XOR of the player's visible Trainer ID, Secret ID, and the two halves
+of the Pokemon's 32-bit Personality Value is less than 8.
+
+Earlier GameShark builds changed `mon.isShiny` from the `battle.started` event.
+That event is emitted **after FireRed has already begun its intro/send-out
+sequence**, so the encounter could already have been prepared as a normal
+Pokemon.
+
+v0.9.2 now generates the FireRed Personality Value before `Battle.start()`
+constructs the wild Pokemon. The generated PID simultaneously respects:
+
+- SHINY = YES / NO
+- selected Nature
+- selected Gender when the species supports it
+
+The FireRed battle engine then stamps the wild Pokemon with the player's real
+Trainer ID and Secret ID before the intro, so the normal Gen1Recomp shiny check,
+sparkle sequence, summary screen, and caught Pokemon all agree that it is shiny.
+MAX IVS is also supplied before battle construction when enabled.
 
 ## FireRed true full noclip — v0.9.1
 
@@ -227,7 +251,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.9.1.zip
+GameShark-0.9.2.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -498,7 +522,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.9.1.zip
+GameShark-0.9.2.zip
 ```
 
 ## Development notes

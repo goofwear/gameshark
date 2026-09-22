@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.9.1
+-- GameShark Compatibility 0.9.2
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -1651,6 +1651,7 @@ return function(mod)
 
     if isGen3(game) then
       installGen3WalkThroughWalls()
+      installGen3WildStartWrapper()
       applyGen3ContinuousEffects()
     end
 
@@ -1902,50 +1903,149 @@ return function(mod)
     end
   end)
 
+  local function gen3NatureId()
+    if state.wildNature=="random" then return nil end
+    for i,v in ipairs(NATURE_CHOICES) do
+      if v==state.wildNature then return i-2 end
+    end
+    return nil
+  end
+
+  local function gen3ForcedPid(species)
+    local Runtime=require("src.core.game3.runtime")
+    local session=Runtime and Runtime.getSession and Runtime.getSession()
+    if not session then return nil end
+
+    local Pokemon=require("src.core.game3.pokemon")
+    local Catching=require("src.core.game3.battle.catching")
+    local bit=require("bit")
+    local Rng=require("src.core.game3.rng")
+
+    local tid=bit.band(tonumber(session.trainerId or session.id or session.playerId) or 0,0xffff)
+    local sid=bit.band(tonumber(Catching.playerSecretId(session)) or 0,0xffff)
+    local trainerXor=bit.band(bit.bxor(tid,sid),0xffff)
+
+    local targetNature=gen3NatureId()
+    local targetGender=nil
+    if state.wildGender=="male" then targetGender="M"
+    elseif state.wildGender=="female" then targetGender="F" end
+
+    local shinyOffset
+    if state.wildShiny=="yes" then
+      shinyOffset=0
+    elseif state.wildShiny=="no" then
+      -- Gen 3 is shiny only when the XOR result is < 8. Eight is the
+      -- smallest guaranteed non-shiny value.
+      shinyOffset=8
+    else
+      shinyOffset=(Rng.Random and Rng.Random() or math.random(0,65535)) % 65536
+    end
+    local targetXor=bit.band(bit.bxor(trainerXor,shinyOffset),0xffff)
+
+    local meta=Pokemon.speciesMeta and Pokemon.speciesMeta(species)
+    local ratio=meta and tonumber(meta.genderRatio)
+
+    local validLow={}
+    for b0=0,255 do
+      local ok=true
+      if targetGender and ratio~=nil then
+        local g
+        if ratio==Pokemon.GENDER_MALE then g="M"
+        elseif ratio==Pokemon.GENDER_FEMALE then g="F"
+        elseif ratio==Pokemon.GENDER_GENDERLESS then g="U"
+        elseif ratio>b0 then g="F" else g="M" end
+        if g~=targetGender then ok=false end
+      end
+      if ok then validLow[#validLow+1]=b0 end
+    end
+    if #validLow==0 then
+      for b0=0,255 do validLow[#validLow+1]=b0 end
+    end
+
+    -- Construct a PID whose high/low halves produce the requested shiny
+    -- XOR. Search the low two bytes for the requested Nature and Gender.
+    for _,b0 in ipairs(validLow) do
+      for b1=0,255 do
+        local pLow=b1*256+b0
+        local pHigh=bit.band(bit.bxor(pLow,targetXor),0xffff)
+        local pid=pHigh*65536+pLow
+        if targetNature==nil or (pid%25)==targetNature then
+          return pid
+        end
+      end
+    end
+    return nil
+  end
+
+  local g3WildStartWrappedVersion=nil
+
+  local function installGen3WildStartWrapper()
+    if not isGen3(mod.game) then return false end
+    local Battle=require("src.core.game3.battle")
+    if not (Battle and type(Battle.start)=="function") then return false end
+    if Battle._gamesharkWildStartVersion=="0.9.2" then return true end
+
+    local previousStart=Battle.start
+    Battle.start=function(opts)
+      if type(opts)=="table" and opts.wild and state.pendingWild then
+        local copy={}
+        for k,v in pairs(opts) do copy[k]=v end
+        local foe={}
+        for k,v in pairs(type(opts.foe)=="table" and opts.foe or {}) do foe[k]=v end
+
+        local species=tonumber(foe.species or foe.speciesId or foe.id)
+        if species then
+          local pid=gen3ForcedPid(species)
+          if pid then
+            foe.personality=pid
+            local P=require("src.core.game3.pokemon")
+            foe.nature=P.natureId and P.natureId(pid) or foe.nature
+            foe.gender=P.gender and P.gender(species,pid) or foe.gender
+          end
+
+          if state.wildMaxIVs then
+            foe.ivs={hp=31,atk=31,def=31,spe=31,spa=31,spd=31}
+          end
+        end
+
+        copy.foe=foe
+        opts=copy
+      end
+      return previousStart(opts)
+    end
+
+    Battle._gamesharkWildStartVersion="0.9.2"
+    g3WildStartWrappedVersion="0.9.2"
+    return true
+  end
+
   local function applyGen3WildOptions(mon)
     if not (isGen3(mod.game) and type(mon)=="table") then return end
-    local p=state.pendingWild
-    if not p then return end
+    if not state.pendingWild then return end
 
+    -- Identity is now generated BEFORE Battle.start constructs the foe. That
+    -- matters because FireRed starts its intro/send-out sequence before the
+    -- battle.started mod event is emitted. At this point only finalize fields
+    -- and recalculate stats; do not rewrite the PID again.
+    local P=require("src.core.game3.pokemon")
     if state.wildMaxIVs then
       mon.ivs=mon.ivs or {}
       mon.ivs.hp=31; mon.ivs.atk=31; mon.ivs.def=31
       mon.ivs.spe=31; mon.ivs.spa=31; mon.ivs.spd=31
     end
 
-    if state.wildNature~="random" then
-      local want=0
-      for i,v in ipairs(NATURE_CHOICES) do if v==state.wildNature then want=i-2 break end end
-      if want>=0 then
-        local pid=math.floor(tonumber(mon.personality) or 0)
-        pid=pid - (pid % 25) + want
-        mon.personality=pid; mon.nature=want
-      end
+    if mon.personality~=nil then
+      mon.nature=P.natureId and P.natureId(mon.personality) or mon.nature
+      mon.gender=P.gender and P.gender(mon.species or mon.speciesId,mon.personality) or mon.gender
     end
 
-    -- FireRed's presentation layer honors isShiny explicitly when present.
     if state.wildShiny=="yes" then mon.isShiny=true
-    elseif state.wildShiny=="no" then mon.isShiny=false end
+    elseif state.wildShiny=="no" then mon.isShiny=false
+    else mon.isShiny=nil end
 
-    if state.wildGender=="male" or state.wildGender=="female" then
-      local wanted=state.wildGender=="female" and "F" or "M"
-      local def=selectedDef()
-      local ratio=def and def.genderRatio
-      if ratio~=nil and ratio~=0xff then
-        local pid=math.floor(tonumber(mon.personality) or 0)
-        -- Search a small PID window so nature stays fixed while gender changes.
-        local nature=pid%25
-        for d=0,6400 do
-          local cand=pid+d
-          if cand%25==nature then
-            local low=cand%256
-            local g=(ratio>low) and "F" or "M"
-            if g==wanted then mon.personality=cand; mon.gender=wanted; break end
-          end
-        end
-      end
-    end
+    if P.applyStats then P.applyStats(mon) end
   end
+
 
   -- battle.started is the authoritative live-battle entry point.  Do not
   -- rely only on scanning game.stack.states: some Gen1Recomp builds/forks

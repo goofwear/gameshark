@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.2] - 2026-09-21
+
+### Fixed
+- Fixed FireRed Wild Pokemon `SHINY = YES`.
+- Forced shininess is now encoded into a valid Gen 3 Personality Value before
+  FireRed constructs the battle Pokemon, rather than only setting a boolean
+  after the battle intro has already begun.
+- The generated PID uses the live FireRed Trainer ID and Secret ID and keeps
+  selected Nature and Gender compatible with the shiny result.
+- `SHINY = NO` now generates a guaranteed non-shiny PID.
+- MAX IVs are applied before FireRed builds the wild battler.
+- Caught forced-shiny Pokemon retain authentic Gen 3 shininess because their PID
+  remains shiny against the player's OT IDs.
+
+
 ## [0.9.1] - 2026-09-20
 
 ### Fixed
