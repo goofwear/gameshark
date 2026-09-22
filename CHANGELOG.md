@@ -1,5 +1,77 @@
 # Changelog
 
+## [0.9.11] - 2026-09-22
+
+- Correct the little-endian decoding of FireRed's BGR555 palette entries. The old byte order prevented the visible cached sprite colors from matching, even when the stored Pokémon was truly shiny.
+- Verified against the supplied FireRed ROM: Mew's front sprite has 589 indexed pixels in the seven colors that change for its shiny form.
+
+## [0.9.10] - 2026-09-22
+
+- Use the cached FireRed sprite that G1RDeluxe actually draws as the first choice for shiny recoloring; reject a conversion when it changes no opaque pixels.
+- Check the Pokémon currently open in the summary rather than a previous battle's Pokémon, and draw a sparkle icon when the game's icon asset is missing.
+
+## [0.9.9] - 2026-09-22
+
+- Fix FireRed shiny sprite setup failing with `attempt to call a nil value`: the input hook now captures the sprite installer through an earlier local declaration.
+
+## [0.9.8] - 2026-09-22
+
+### Fixed
+- Apply FireRed shiny identity using the live `battle.started` event rather
+  than depending on an early `Battle.start` module wrapper.
+- Use the active battle event payload to select the shiny sprite.
+- Show any remaining diagnostic error when selecting SHINY CHECK.
+
+
+## [0.9.7] - 2026-09-22
+
+### Fixed
+- Remove unsupported `package.loaded` access from FireRed sprite and menu
+  callbacks in the mod sandbox.
+- Add an in-menu SHINY CHECK status to locate the remaining failure if a live
+  Android test still shows a normal-colored Pokémon.
+
+
+## [0.9.6] - 2026-09-22
+
+### Fixed
+- Wrap `Pokemon.frontPic` and `Pokemon.backPic`, which the FireRed main
+  battle renderer calls directly, to show shiny colors in battle.
+- Use the same palette lookup for the shiny summary portrait.
+
+
+## [0.9.5] - 2026-09-22
+
+### Fixed
+- Apply FireRed SHINY settings to wild encounters with WILD PICK off.
+- Finalize shiny identity through both battle creation and battle.started.
+- Recolor battle sprites using palette values from the supplied FireRed ROM,
+  without bundling the ROM or Pokémon image assets.
+
+
+## [0.9.4] - 2026-09-22
+
+### Fixed
+- Preserve the FireRed wild identity request through `Battle.start` and finalize
+  the live enemy Pokémon in the battle start callback.
+- Use FireRed's known shiny palette table as a validated fallback when the
+  ROM is available but its pointer header cannot be found.
+- Document the original ROM dependency for authentic shiny colors.
+
+
+## [0.9.3] - 2026-09-22
+
+### Fixed
+- Fixed FireRed forced shiny state on the actual live wild battler.
+- Forced shiny/non-shiny PID and OT IDs are now finalized immediately after
+  FireRed constructs `Battle.getState().enemy.mon`.
+- Caught forced-shiny Pokémon retain the shiny state.
+- Added FireRed shiny battle-palette rendering. GameShark discovers the ROM's
+  original `gMonShinyPaletteTable` from the GF ROM header and uses it for
+  battlers that the engine reports as shiny.
+- No Action Replay source code is used by this implementation.
+
+
 ## [0.9.2] - 2026-09-21
 
 ### Fixed

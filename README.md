@@ -1,23 +1,98 @@
-# GameShark Compatibility v0.9.2
+# GameShark Compatibility v0.9.11
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
 **Repository:** https://github.com/goofwear/gameshark
 
-GameShark Compatibility is a standalone GameShark-style cheat and debug menu for **Gen1Recomp**. It automatically adapts to the active game and supports **Gen 1 and Gen 2** without depending on another cheat, move-manager, item-manager, or DV/EV mod.
+## FireRed shiny event fix — v0.9.8
 
+The 0.9.7 Android recording shows `SHINY CHECK = START ERR` before and
+after the Mew battle. The early `Battle.start` wrapper failed to install.
+This version applies shiny identity to the live wild Pokémon from the
+`battle.started` event, without relying on that wrapper. The picture lookup
+uses the active battle from the same event, without requiring the battle
+engine during setup.
 
+If it still fails, select **SHINY CHECK** in the Wild Pokémon menu to see
+its full setup or event error. Its status after a battle should say
+`ID OK` or `COLOR OK`. Return after the battle to inspect it. The mod includes
+no ROM or Pokémon images.
 
+## FireRed sandbox fix and shiny check — v0.9.7
 
+The user-provided 0.3.0 `.love` package matches the earlier source in the
+FireRed battle, sprite, and mod runtime files. The previous mod used
+`package.loaded` inside sprite callbacks, but the mod sandbox does not expose
+`package`. Version 0.9.7 uses the permitted `require` path instead.
 
+The Wild Pokémon menu now includes **SHINY CHECK**. After choosing SHINY YES
+and entering a battle, return to the menu and check the status:
 
+- `COLOR OK`: shiny identity and recolored sprite were reached.
+- `ID OK`: shiny identity was applied, but the recolored sprite was not shown.
+- `NO COLORS`: the active Pokémon was shiny, but its sprite palette was unavailable.
+- `HOOK OK`: setup ran, but no shiny Pokémon was finalized.
+- `WALK ERR`, `START ERR`, or `PIC ERR`: the named setup step failed.
+- `NO START` or `NO PIC`: the corresponding setup step was unavailable.
+- `NO HOOK`: the setup hook did not run.
 
+Please share a screenshot of this line after testing if the sprite remains
+pink. This is a diagnostic release and still needs a live Android play test.
 
+## FireRed shiny sprite fix — v0.9.6
 
+The reported video shows WILD PICK ON, MEW selected, SHINY YES, and a
+normal-colored pink Mew in the battle. FireRed's main renderer calls
+`Pokemon.frontPic` / `Pokemon.backPic` directly, bypassing the
+`Ui.battlerPic` hook used by v0.9.5. This build also wraps those actual
+sprite functions and applies the extracted shiny palette to the active
+battle Pokémon and its party summary portrait.
 
+The video does not show Mew's captured summary. The shiny identity and star
+still need a live capture check. The ZIP contains no ROM or Pokémon images.
 
+## FireRed shiny changes in v0.9.5
 
+Setting **SHINY = YES** applies to wild encounters even when **WILD PICK = OFF**.
+WILD PICK only controls the species. **BATTLE NOW** also uses these settings.
+The wild Pokémon's personality and shiny state are written during FireRed
+battle creation, and the `battle.started` event provides a second path to
+finalize it. After capture, the shiny star should appear in the summary.
 
+Original FireRed normal and shiny palette values were extracted from the
+FireRed 1.0 ROM supplied for this repair. Only these small color tables are
+included in this ZIP. The ROM and Pokémon sprite images are not included.
+The mod recolors Gen1Recomp's imported normal battle sprites at runtime, so
+no ROM file needs to remain in the game directory. For 18 species whose normal
+palette repeats an RGB value with two different shiny targets, a few pixels
+may differ from the original sprite when the ROM is not available at runtime.
+
+This build passed syntax, archive, ROM palette, battle-start, and direct
+FireRed sprite-path checks. A live FireRed play test is still required.
+
+## FireRed shiny correction — v0.9.3
+
+Video testing exposed two separate FireRed issues:
+
+1. The forced shiny needed to be applied to the **actual live
+   `Battle.getState().enemy.mon`** after FireRed finished constructing the
+   battler, not just to the encounter/foe table.
+2. The current Gen1Recomp FireRed battle renderer decodes Pokémon battle
+   pictures with the normal `gMonPaletteTable`; a logically shiny Pokémon can
+   therefore still look normal-coloured.
+
+v0.9.3 addresses both. GameShark now:
+
+- writes a valid Gen 3 shiny PID plus `isShiny = true` directly to the live wild
+  battler before the first battle update/render frame;
+- preserves the PID/OT relationship so a caught Pokémon stays shiny;
+- discovers FireRed's own `gMonShinyPaletteTable` from the ROM header at
+  runtime instead of hard-coding a ROM address;
+- renders shiny enemy/player battle pictures using that original FireRed shiny
+  palette when the battler is actually shiny.
+
+The summary screen's existing shiny-star logic also sees the corrected
+`isShiny`/PID state after capture.
 
 ## FireRed shiny Wild Pokemon fix — v0.9.2
 
@@ -251,7 +326,7 @@ The current manifest compatibility expression is:
 The release ZIP should contain the mod inside a top-level `GameShark` folder:
 
 ```text
-GameShark-0.9.2.zip
+GameShark-0.9.3.zip
 └── GameShark/
     ├── manifest.json
     ├── main.lua
@@ -522,7 +597,7 @@ Gen1Recomp can therefore use the GitHub repository's Releases for **Update** and
 For best compatibility, publish release assets using the mod ID and semantic version, for example:
 
 ```text
-GameShark-0.9.2.zip
+GameShark-0.9.3.zip
 ```
 
 ## Development notes
@@ -586,4 +661,3 @@ Version **0.8.1** fixes the FireRed **GAMESHARK** start-menu row appearing corre
 FireRed uses Gen1Recomp's Gen 3 modal UI stack while the shared GameShark `ListMenu` screens use the Gen 1/2 StateStack-style screen contract. GameShark now hosts those registered screens through a small Gen 3 compatibility bridge, adapts their method-style `update` and `draw` calls, and prevents the still-open FireRed START menu underneath from consuming the same button edge.
 
 The existing Red/Blue/Yellow and Gold/Silver/Crystal UI paths are unchanged.
-
