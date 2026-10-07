@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.9.12] - 2026-10-07
+
+- Add party Pokérus action and next-step egg hatch toggle to Gen 2 and Gen 3 games. The hatch toggle uses each game's existing step event and animation.
+- Recognize LeafGreen, Ruby, Sapphire, and Emerald native Game3 menus in addition to FireRed.
+
 ## [0.9.11] - 2026-09-22
 
 - Correct the little-endian decoding of FireRed's BGR555 palette entries. The old byte order prevented the visible cached sprite colors from matching, even when the stored Pokémon was truly shiny.

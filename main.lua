@@ -1,4 +1,4 @@
--- GameShark Compatibility 0.9.11
+-- GameShark Compatibility 0.9.12
 -- Universal Gen 1 + Gen 2 + Gen 3 build for Gen1Recomp 0.1.79+.
 -- Author: goofwear
 -- Uses only the public mod API and objects handed to hooks.
@@ -19,6 +19,7 @@ local MOVE_PICK_SCREEN = "GameSharkMovePick"
 local MOVE_SLOT_SCREEN = "GameSharkMoveSlot"
 local FRIENDSHIP_SCREEN = "GameSharkFriendship"
 local FRIENDSHIP_ACTION_SCREEN = "GameSharkFriendshipAction"
+local POKERUS_SCREEN = "GameSharkPokerus"
 local G3_STAT_SCREEN = "GameSharkGen3StatEdit"
 local G3_VALUE_SCREEN = "GameSharkGen3ValuePick"
 
@@ -67,13 +68,15 @@ local function isGen2(game)
 end
 
 local function isGen3(game)
-  -- FireRed's native Game3 object is not a Gen 1/2 Game object and does not
-  -- reliably expose save.generation.  Detect the active title first, exactly
+  -- Native Game3 objects do not reliably expose save.generation. Detect the
+  -- active Gen 3 title first, exactly
   -- at the engine-version boundary, then keep the old save-generation fallback
   -- for compatibility with the Gen3 facade used by some mod API paths.
   local ok,Version=pcall(require,"src.core.GameVersion")
-  if ok and Version and type(Version.get)=="function" and Version.get()=="firered" then
-    return true
+  if ok and Version and type(Version.get)=="function" then
+    local title=Version.get()
+    if title=="firered" or title=="leafgreen" or title=="ruby"
+        or title=="sapphire" or title=="emerald" then return true end
   end
   local s=game and game.save
   return s and s.generation==3 or false
@@ -209,6 +212,73 @@ return function(mod)
   end
   local function enabled(effect) return state.active[effect]==true end
   local function setEnabled(effect,value) state.active[effect]=value==true; persist() end
+
+  local function pokerusStatus(mon)
+    local value=math.floor(tonumber(mon and mon.pokerus) or 0)%256
+    if value%16>0 then return "ACTIVE" end
+    return value>0 and "CURED" or "NONE"
+  end
+
+  local function infectPokerus(mon)
+    if type(mon)~="table" or mon.isEgg==true or mon.egg==true then return false end
+    -- Strain 3, four active days; Gen 2 and Gen 3 both store strain in the
+    -- high nibble and days remaining in the low nibble.
+    mon.pokerus=0x34
+    return true
+  end
+
+  local eggHatchHooksInstalled=false
+  local function installInstantEggHatch()
+    if eggHatchHooksInstalled then return end
+    if isGen2(mod.game) then
+      local ok,Breeding=pcall(require,"src.core.gen2.Breeding")
+      if not(ok and Breeding and type(Breeding.step)=="function") then return end
+      if Breeding._gamesharkHatchVersion~="0.9.12" then
+        local previous=Breeding.step
+        Breeding.step=function(data,save,rng)
+          if enabled("instant_hatch") and type(save)=="table" then
+            local found=false
+            for _,mon in ipairs(save.party or {}) do
+              if type(mon)=="table" and mon.isEgg==true then
+                mon.eggSteps=1
+                found=true
+              end
+            end
+            if found then save.stepCount=127 end
+          end
+          return previous(data,save,rng)
+        end
+        Breeding._gamesharkHatchVersion="0.9.12"
+      end
+      eggHatchHooksInstalled=true
+    elseif isGen3(mod.game) then
+      local ok,Daycare=pcall(require,"src.core.game3.daycare")
+      if not(ok and Daycare and type(Daycare.step)=="function") then return end
+      if Daycare._gamesharkHatchVersion~="0.9.12" then
+        local previous=Daycare.step
+        Daycare.step=function(session)
+          if enabled("instant_hatch") then
+            local live=session or (Daycare.sessionOf and Daycare.sessionOf(session))
+            local found=false
+            for _,mon in ipairs(live and live.party or {}) do
+              if type(mon)=="table" and (mon.isEgg==true or mon.egg==true)
+                  and not mon.isBadEgg then
+                mon.friendship=0; mon.happiness=0; mon.eggCycles=0
+                found=true
+              end
+            end
+            if found then
+              local dc=Daycare.stateOf and Daycare.stateOf(live)
+              if dc then dc.stepCounter=254 end
+            end
+          end
+          return previous(session)
+        end
+        Daycare._gamesharkHatchVersion="0.9.12"
+      end
+      eggHatchHooksInstalled=true
+    end
+  end
 
   -- Emulate the real Crystal GameShark code 010B3CBE. In the original game
   -- that writes $0B to sGSBallFlag. Gen1Recomp represents that SRAM byte as
@@ -1652,6 +1722,7 @@ return function(mod)
   local installGen3ShinyBattlePalette
   mod.hooks:wrap("input.step", function(next,game,dt)
     installBattleArtCompat()
+    installInstantEggHatch()
 
     if isGen3(game) then
       -- Keep setup failures visible in the Wild menu: the engine skips a
@@ -2550,6 +2621,9 @@ return function(mod)
   -- address.
   installGen3ShinyBattlePalette=function()
     if not isGen3(mod.game) then return false end
+    local Version=require("src.core.GameVersion")
+    local title=Version.get and Version.get()
+    if title~="firered" and title~="leafgreen" then return false end
     local Ui=require("src.core.game3.battle.ui")
     if not (Ui and type(Ui.battlerPic)=="function") then return false end
     if Ui._gamesharkShinyPicVersion=="0.9.11" then return true end
@@ -3946,6 +4020,33 @@ return function(mod)
     return menu
   end})
 
+  mod.content.screens:register(POKERUS_SCREEN,{new=function(game)
+    local party=game and game.save and game.save.party or {}
+    local items={}
+    for slot,mon in ipairs(party) do
+      local def=editorSpeciesDef(mon,game)
+      local name=(mon.nickname and mon.nickname~="" and mon.nickname)
+        or (def and def.name) or mon.species or ("SLOT "..slot)
+      local egg=mon.isEgg==true or mon.egg==true
+      items[#items+1]={label=tostring(slot)..". "..tostring(name),
+        right=egg and "EGG" or pokerusStatus(mon),slot=slot,egg=egg}
+    end
+    if #party==0 then items[#items+1]={label="NO POKEMON",kind="info"} end
+    items[#items+1]={label="BACK",kind="back"}
+    local menu=mod.ui.ListMenu.new(game,"POKERUS",items,{
+      onChoose=function(item,current)
+        if not item then return end
+        if item.kind=="back" then current:close();pushScreen(game,MAIN_SCREEN);return end
+        if item.slot and not item.egg then
+          infectPokerus(party[item.slot])
+          current:close();pushScreen(game,POKERUS_SCREEN)
+        end
+      end,
+      onCancel=function() pushScreen(game,MAIN_SCREEN) end
+    })
+    return menu
+  end})
+
   mod.content.screens:register(MAIN_SCREEN,{new=function(game)
     local gold=isGen2(game); local g3=isGen3(game); local items={}
     for _,c in ipairs(CHEATS) do
@@ -3978,6 +4079,11 @@ return function(mod)
     if hasFriendshipFeature(game) then
       items[#items+1]={label="FRIENDSHIP",right=">",kind="friendship"}
     end
+    if gold then
+      items[#items+1]={label="POKERUS",right=">",kind="pokerus"}
+      items[#items+1]={label="INSTANT HATCH",right=enabled("instant_hatch") and "ON" or "OFF",
+        kind="instant_hatch"}
+    end
     items[#items+1]={label="TEACH MOVE",right=">",kind="teach_move"}
     items[#items+1]={label="GIVE ITEM",right=">",kind="give_item"}
     items[#items+1]={label="TELEPORT",right=">",kind="teleport"}
@@ -4005,6 +4111,17 @@ return function(mod)
       if item.kind=="friendship" then
         current:close()
         pushScreen(game,FRIENDSHIP_SCREEN)
+        return
+      end
+      if item.kind=="pokerus" then
+        current:close()
+        pushScreen(game,POKERUS_SCREEN)
+        return
+      end
+      if item.kind=="instant_hatch" then
+        setEnabled("instant_hatch",not enabled("instant_hatch"))
+        current:close()
+        pushScreen(game,MAIN_SCREEN)
         return
       end
       if item.kind=="teach_move" then
@@ -4185,6 +4302,9 @@ return function(mod)
     end
     out[#out+1]={label="WILD POKEMON >",kind="wild"}
     out[#out+1]={label="FRIENDSHIP >",kind="friend_party"}
+    out[#out+1]={label="POKERUS >",kind="pokerus_party"}
+    out[#out+1]={label="INSTANT HATCH",effect="instant_hatch",
+      value=enabled("instant_hatch") and "ON" or "OFF"}
     out[#out+1]={label="TEACH MOVE >",kind="move_party"}
     out[#out+1]={label="GIVE ITEM >",kind="item"}
     out[#out+1]={label="TELEPORT >",kind="teleport"}
@@ -4251,8 +4371,19 @@ return function(mod)
         {label="BACK",kind="back"},
       }
     end
-    if G3Menu.mode=="move_party" or G3Menu.mode=="stats_party" or G3Menu.mode=="friend_party" then
+    if G3Menu.mode=="move_party" or G3Menu.mode=="stats_party" or G3Menu.mode=="friend_party"
+        or G3Menu.mode=="pokerus_party" then
       return g3PartyRows()
+    end
+    if G3Menu.mode=="pokerus" then
+      local mon=g3Party()[G3Menu.selectedParty]
+      if not mon then return {{label="BACK",kind="back"}} end
+      return {
+        {label="STATUS",kind="readonly",value=pokerusStatus(mon)},
+        {label="INFECT POKERUS",kind="infect",
+          value=(mon.isEgg or mon.egg) and "EGG" or ">"},
+        {label="BACK",kind="back"},
+      }
     end
     if G3Menu.mode=="move" then return g3MoveRows() end
     if G3Menu.mode=="move_slot" then
@@ -4335,6 +4466,16 @@ return function(mod)
       elseif row.kind then
         g3Switch(row.kind)
       end
+      return
+    end
+
+    if G3Menu.mode=="pokerus_party" then
+      G3Menu.selectedParty=row.slot; g3Switch("pokerus"); return
+    end
+    if G3Menu.mode=="pokerus" then
+      local mon=g3Party()[G3Menu.selectedParty]
+      if row.kind=="infect" then infectPokerus(mon)
+      elseif row.kind=="back" then g3Switch("pokerus_party") end
       return
     end
 
@@ -4442,7 +4583,8 @@ return function(mod)
   local function g3Back()
     local back={wild="main",species="wild",teleport="main",item="main",item_qty="item",
       move_party="main",move="move_party",move_slot="move",friend_party="main",
-      friend="friend_party",stats_party="main",stats="stats_party"}
+      friend="friend_party",pokerus_party="main",pokerus="pokerus_party",
+      stats_party="main",stats="stats_party"}
     if back[G3Menu.mode] then g3Switch(back[G3Menu.mode]) else G3Menu.close() end
   end
 
@@ -4467,6 +4609,7 @@ return function(mod)
     teleport="TELEPORT",item="GIVE ITEM",item_qty="ITEM QUANTITY",
     move_party="CHOOSE POKEMON",move="TEACH MOVE",move_slot="REPLACE MOVE",
     friend_party="CHOOSE POKEMON",friend="FRIENDSHIP",
+    pokerus_party="CHOOSE POKEMON",pokerus="POKERUS",
     stats_party="CHOOSE POKEMON",stats="IV / EV EDITOR"}
 
   function G3Menu.draw()

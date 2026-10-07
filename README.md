@@ -1,8 +1,21 @@
-# GameShark Compatibility v0.9.11
+# GameShark Compatibility v0.9.12
 
 **Author:** goofwear  
 **Mod ID:** `GameShark`  
 **Repository:** https://github.com/goofwear/gameshark
+
+## Pokérus and instant egg hatch — v0.9.12
+
+For Gold, Silver, Crystal, FireRed, LeafGreen, Ruby, Sapphire, and Emerald,
+**POKERUS** lets you infect a selected party Pokémon. Eggs cannot be infected.
+The menu displays NONE, ACTIVE, or CURED. Active infection uses strain 3 with
+four days remaining (0x34). The game's regular daily cure and spread logic
+continues to handle it.
+
+**INSTANT HATCH** is an ON/OFF toggle for party eggs. When ON, take one normal
+walking step to trigger the game's hatch sequence. Each egg hatches on its own
+step. The toggle does not create eggs or hatch eggs while standing still.
+These entries are hidden in Red, Blue, and Yellow, which have neither feature.
 
 ## FireRed shiny event fix — v0.9.8
 
